@@ -74,6 +74,7 @@ public class ApiClient {
             @Override
             public void run() {
                 HttpURLConnection conn = null;
+                boolean sent = false;
                 try {
                     URL url = new URL(urlStr);
                     conn = (HttpURLConnection) url.openConnection();
@@ -85,6 +86,14 @@ public class ApiClient {
                         conn.setRequestProperty("X-Admin-Token", token);
                     }
                     conn.setDoOutput(true);
+                    try {
+                        conn.connect();
+                    } catch (Exception e) {
+                        // Collegamento non riuscito: la richiesta non è partita, si può riprovare su un altro indirizzo
+                        postError(callback, e.getMessage() != null ? e.getMessage() : I18n.t("net.errore_connessione"));
+                        return;
+                    }
+                    sent = true;
                     if (jsonBody != null) {
                         byte[] outputInBytes = jsonBody.getBytes(StandardCharsets.UTF_8);
                         OutputStream os = conn.getOutputStream();
@@ -109,12 +118,30 @@ public class ApiClient {
                         }
                     }
                 } catch (final Exception e) {
-                    postError(callback, e.getMessage() != null ? e.getMessage() : I18n.t("net.errore_connessione"));
+                    if (sent && e instanceof java.net.SocketTimeoutException) {
+                        // Comando arrivato al PC ma risposta in ritardo: non va ripetuto (es. aggiunta alla whitelist)
+                        postError(callback, noReplyMessage());
+                    } else {
+                        postError(callback, e.getMessage() != null ? e.getMessage() : I18n.t("net.errore_connessione"));
+                    }
                 } finally {
                     if (conn != null) conn.disconnect();
                 }
             }
         });
+    }
+
+    private static String noReplyMessage() {
+        return I18n.t("net.pc_non_ha_risposto_in_tempo");
+    }
+
+    /**
+     * L'errore è una risposta del PC (codice HTTP) o un comando partito senza risposta in tempo: il PC è raggiungibile
+     * o ha già ricevuto il comando, quindi non si cambia indirizzo e non si ripete la richiesta.
+     */
+    public static boolean isFinalError(String error) {
+        if (error == null) return false;
+        return error.matches("(?s)HTTP [45]\\d\\d:.*") || error.equals(noReplyMessage());
     }
 
     public static final int HOST_SAME = 0, HOST_OTHER = 1, HOST_UNREACHABLE = 2;

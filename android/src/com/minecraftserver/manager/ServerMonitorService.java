@@ -98,7 +98,11 @@ public class ServerMonitorService extends Service {
             return START_NOT_STICKY;
         }
 
-        startForegroundServiceNotification();
+        if (!startForegroundServiceNotification()) {
+            stopMonitoring();
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         startPushListener();
         return START_STICKY;
     }
@@ -116,7 +120,12 @@ public class ServerMonitorService extends Service {
 
     @Override
     public void onTaskRemoved(Intent rootIntent) {
-        // Alcuni produttori chiudono il processo quando l'app viene tolta dalle recenti: riprogramma l'avvio del servizio
+        // Alcuni produttori chiudono il processo quando l'app viene tolta dalle recenti: riprogramma l'avvio del servizio.
+        // Da Android 12 un allarme normale non può avviare un servizio in primo piano: lì basta START_STICKY
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            super.onTaskRemoved(rootIntent);
+            return;
+        }
         try {
             Intent restart = new Intent(getApplicationContext(), ServerMonitorService.class);
             restart.setAction(ACTION_START);
@@ -192,8 +201,12 @@ public class ServerMonitorService extends Service {
         }
     }
 
-    private void startForegroundServiceNotification() {
+    /** Le notifiche riportano all'app già aperta (con la sezione giusta) invece di aprirne una seconda copia. */
+    private static final int OPEN_APP_FLAGS = Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP;
+
+    private boolean startForegroundServiceNotification() {
         Intent notificationIntent = new Intent(this, MainActivity.class);
+        notificationIntent.addFlags(OPEN_APP_FLAGS);
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 this,
                 0,
@@ -214,14 +227,22 @@ public class ServerMonitorService extends Service {
                 .setContentIntent(pendingIntent)
                 .setOngoing(true);
 
-        if (Build.VERSION.SDK_INT >= 34) {
-            try {
-                startForeground(NOTIF_SERVICE_ID, builder.build(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
-            } catch (Throwable t) {
+        // Da Android 12 il sistema può rifiutare l'avvio in primo piano quando riavvia il servizio con l'app chiusa
+        // (ForegroundServiceStartNotAllowedException): prima l'app si chiudeva per errore, ora il servizio si ferma
+        // e riparte alla prossima apertura dell'app o al riavvio del telefono
+        try {
+            if (Build.VERSION.SDK_INT >= 34) {
+                try {
+                    startForeground(NOTIF_SERVICE_ID, builder.build(), android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+                } catch (IllegalArgumentException t) {
+                    startForeground(NOTIF_SERVICE_ID, builder.build());
+                }
+            } else {
                 startForeground(NOTIF_SERVICE_ID, builder.build());
             }
-        } else {
-            startForeground(NOTIF_SERVICE_ID, builder.build());
+            return true;
+        } catch (RuntimeException e) {
+            return false;
         }
     }
 
@@ -337,6 +358,18 @@ public class ServerMonitorService extends Service {
                     // Connessione rimasta aperta a lungo = rete sana: si riparte dall'attesa minima
                     if (connectedAt > 0 && System.currentTimeMillis() - connectedAt > 60000) backoffMs = 5000;
                     mWaitingToReconnect = true;
+                    // A schermo spento la CPU dorme e l'attesa si allungherebbe di molto (avvisi in ritardo): per le
+                    // attese brevi la si tiene sveglia; per le lunghe (rete assente) sveglia il ritorno della rete
+                    android.os.PowerManager.WakeLock wl = null;
+                    if (backoffMs <= 60000) {
+                        try {
+                            android.os.PowerManager pm = (android.os.PowerManager) getSystemService(Context.POWER_SERVICE);
+                            wl = pm.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "Voxarium:ntfyReconnect");
+                            wl.acquire(backoffMs + 2000);
+                        } catch (Exception ignored) {
+                            wl = null;
+                        }
+                    }
                     try {
                         Thread.sleep(backoffMs);
                         backoffMs = Math.min(backoffMs * 2, 300000);
@@ -344,6 +377,9 @@ public class ServerMonitorService extends Service {
                         backoffMs = 5000; // rete tornata: si riprova subito, ripartendo dall'attesa minima
                     } finally {
                         mWaitingToReconnect = false;
+                        if (wl != null && wl.isHeld()) {
+                            try { wl.release(); } catch (Exception ignored) {}
+                        }
                     }
                 }
             }
@@ -592,7 +628,8 @@ public class ServerMonitorService extends Service {
     private void triggerCrashNotification(String title, String message) {
         try {
             Intent notificationIntent = new Intent(this, MainActivity.class);
-            notificationIntent.putExtra("navigate_to", "console");
+            notificationIntent.putExtra("target_section", 4); // Console
+            notificationIntent.addFlags(OPEN_APP_FLAGS);
             PendingIntent pendingIntent = PendingIntent.getActivity(
                     this,
                     1,
@@ -628,7 +665,9 @@ public class ServerMonitorService extends Service {
         if (!Flavor.SELF_UPDATE) return;
         try {
             Intent notificationIntent = new Intent(this, MainActivity.class);
-            notificationIntent.putExtra("navigate_to", "settings");
+            notificationIntent.putExtra("target_section", 8); // Impostazioni
+            notificationIntent.putExtra("check_update", true);
+            notificationIntent.addFlags(OPEN_APP_FLAGS);
             PendingIntent pendingIntent = PendingIntent.getActivity(
                     this,
                     2,
@@ -661,7 +700,8 @@ public class ServerMonitorService extends Service {
     private void triggerBackupNotification(String title, String message) {
         try {
             Intent notificationIntent = new Intent(this, MainActivity.class);
-            notificationIntent.putExtra("navigate_to", "dashboard");
+            notificationIntent.putExtra("target_section", 0); // Stato server
+            notificationIntent.addFlags(OPEN_APP_FLAGS);
             PendingIntent pendingIntent = PendingIntent.getActivity(
                     this,
                     3,
@@ -694,6 +734,7 @@ public class ServerMonitorService extends Service {
     private void triggerGeneralAlertNotification(String title, String message) {
         try {
             Intent notificationIntent = new Intent(this, MainActivity.class);
+            notificationIntent.addFlags(OPEN_APP_FLAGS);
             PendingIntent pendingIntent = PendingIntent.getActivity(
                     this,
                     4,
@@ -767,12 +808,24 @@ public class ServerMonitorService extends Service {
         mUpdateThread.start();
     }
 
+    private int installedVersionCode() {
+        try {
+            android.content.pm.PackageInfo pi = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return Build.VERSION.SDK_INT >= 28 ? (int) pi.getLongVersionCode() : pi.versionCode;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     private void checkUpdateViaHttp() {
         try {
             SharedPreferences prefs = getSharedPreferences("MinecraftControllerPrefs", MODE_PRIVATE);
             String localUrl = prefs.getString("local_url", "").replaceAll("/+$", "");
             String remoteUrl = prefs.getString("remote_url", "").replaceAll("/+$", "");
-            int currentCode = prefs.getInt("app_version_code", 81);
+            // Versione installata davvero: prima si leggeva una preferenza mai scritta (sempre 81), con avvisi di
+            // aggiornamento per la versione già installata o per una più vecchia
+            int currentCode = installedVersionCode();
+            if (currentCode <= 0) return;
             int lastNotified = prefs.getInt("last_notified_update_code", 0);
 
             String[] candidates = new String[]{localUrl, remoteUrl};

@@ -231,7 +231,10 @@ public class ServerWidgetProvider extends AppWidgetProvider {
         String state = null;
         try {
             String baseUrl = getBaseUrl(context);
-            if (baseUrl.isEmpty()) return null;
+            if (baseUrl.isEmpty()) {
+                showUnreachable(context);
+                return null;
+            }
             URL url = new URL(baseUrl + "/api/status");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
@@ -279,6 +282,8 @@ public class ServerWidgetProvider extends AppWidgetProvider {
             }
             conn.disconnect();
         } catch (Exception ignored) {}
+        // PC spento o non raggiungibile: prima restava lo stato precedente (o "Online" del layout), anche a PC spento
+        if (state == null) showUnreachable(context);
         return state;
     }
 
@@ -292,7 +297,10 @@ public class ServerWidgetProvider extends AppWidgetProvider {
             public void run() {
                 try {
                     String baseUrl = getBaseUrl(context);
-                    if (baseUrl.isEmpty()) return;
+                    if (baseUrl.isEmpty()) {
+                        showUnreachable(context);
+                        return;
+                    }
                     String token = getOrFetchAuthToken(context, baseUrl);
 
                     URL url = new URL(baseUrl + endpoint);
@@ -355,6 +363,22 @@ public class ServerWidgetProvider extends AppWidgetProvider {
                 } catch (Exception ignored) {}
             }
         }).start();
+    }
+
+    /** Il PC non risponde: stato grigio (widget.non_raggiungibile) invece dell'ultimo stato letto. */
+    private static void showUnreachable(Context context) {
+        AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
+        int[] allWidgetIds = appWidgetManager.getAppWidgetIds(new ComponentName(context, ServerWidgetProvider.class));
+        if (allWidgetIds == null || allWidgetIds.length == 0) return;
+        I18n.ensure(context);
+        RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_server_control);
+        views.setTextViewText(R.id.widget_status_pill, I18n.t("widget.non_raggiungibile"));
+        views.setTextColor(R.id.widget_status_pill, Color.parseColor("#9a9ca2"));
+        views.setTextViewText(R.id.widget_players, I18n.t("widget.giocatori"));
+        views.setTextViewText(R.id.widget_ram, "RAM: -- GB");
+        for (int widgetId : allWidgetIds) {
+            appWidgetManager.partiallyUpdateAppWidget(widgetId, views);
+        }
     }
 
     private static void updateWidgetUI(Context context, String state, int playersOnline, int maxPlayers, double ramGb, double tps) {

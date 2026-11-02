@@ -1,0 +1,1 @@
+Fixes: during a backup the app no longer multiplies its requests to the PC; widget, notifications, update alerts, PC errors (file editor no longer empty), backup after a crash, whitelist, server.properties and network changes.

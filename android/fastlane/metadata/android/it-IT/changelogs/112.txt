@@ -1,0 +1,1 @@
+Correzioni: durante un backup l'app non moltiplica più le richieste al PC; widget, notifiche, avvisi di aggiornamento, errori del PC (editor dei file non più vuoto), backup dopo un crash, whitelist, server.properties e cambio di rete.

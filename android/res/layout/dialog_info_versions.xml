@@ -83,14 +83,23 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Novità per telefono (v4.13.5)"
-                android:tag="t:ui.novita_telefono|v4.13.5"
+                android:text="Novità per telefono (v4.13.6)"
+                android:tag="t:ui.novita_telefono|v4.13.6"
                 android:textColor="#f4f4f5"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
 
             <!-- CONTENUTO NOVITÀ TELEFONO -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Novità (v4.13.6): correzioni. Durante un backup l'app non moltiplica più le richieste al PC; il widget a PC spento mostra Non raggiungibile invece di Online; niente più falsi avvisi di aggiornamento; le notifiche aprono la sezione giusta senza una seconda copia dell'app; gli errori del PC non vengono più mostrati come riusciti (l'editor dei file non si apre più vuoto); backup e ripristino si possono fare dopo un crash; le azioni non vengono ripetute quando il PC risponde in ritardo; un PIN cambiato o la perdita di una rete non fanno più passare l'app da casa a internet; lista giocatori, whitelist e server.properties più affidabili."
+                    android:tag="t:ui.novita_v4_13_6_correzioni"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -247,6 +256,16 @@
                 android:background="#0f0f11"
                 android:padding="12dp"
                 android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="• v4.13.6 (Build 112):
+Correzioni: backup, widget, notifiche, errori del PC, whitelist, server.properties e cambio di rete."
+                    android:tag="t:ui.v4_13_6_build_112_correzioni"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="4dp" />
 
                 <TextView
                     android:layout_width="match_parent"

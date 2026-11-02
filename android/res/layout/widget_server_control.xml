@@ -38,8 +38,8 @@
             android:layout_height="wrap_content"
             android:layout_alignParentEnd="true"
             android:layout_centerVertical="true"
-            android:text="Online"
-            android:textColor="#a5d36f"
+            android:text="--"
+            android:textColor="#9a9ca2"
             android:textSize="11sp"
             android:textStyle="bold" />
     </RelativeLayout>

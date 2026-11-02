@@ -1,8 +1,8 @@
 {
-  "version_code": 111,
-  "version_name": "4.13.5",
+  "version_code": 112,
+  "version_name": "4.13.6",
   "download_url": "/static/Controllo_Server_Minecraft.apk",
-  "release_notes": "Il PC di casa si riconosce con una prova che solo il tuo PC sa calcolare: chi è stato sulla tua rete di casa non può fingersi il PC su un altro Wi-Fi (serve il programma PC 4.23.2).",
+  "release_notes": "Correzioni: durante un backup l'app non moltiplica piu' le richieste al PC; widget 'Non raggiungibile' a PC spento; niente falsi avvisi di aggiornamento; notifiche alla sezione giusta; errori del PC non piu' mostrati come riusciti (editor dei file non piu' vuoto); backup dopo un crash; azioni non ripetute; PIN cambiato e cambi di rete; giocatori, whitelist e server.properties.",
   "min_sdk": 26,
   "target_sdk": 35
 }

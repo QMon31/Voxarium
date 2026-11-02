@@ -58,8 +58,8 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends Activity implements View.OnClickListener {
 
-    public static final int CURRENT_VERSION_CODE = 111;
-    public static final String CURRENT_VERSION_NAME = "4.13.5";
+    public static final int CURRENT_VERSION_CODE = 112;
+    public static final String CURRENT_VERSION_NAME = "4.13.6";
 
     private int dpToPx(int dp) {
         return Math.round(dp * getResources().getDisplayMetrics().density);
@@ -286,7 +286,8 @@ public class MainActivity extends Activity implements View.OnClickListener {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        handleIncomingIntent(intent);
+        // Con l'app bloccata la sezione si apre dopo lo sblocco (onUnlockSuccess legge getIntent())
+        if (mIsAuthenticated) handleIncomingIntent(intent);
     }
 
     private void handleIncomingIntent(Intent intent) {
@@ -910,10 +911,10 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 }
                 @Override
                 public void onError(String error) {
-                    mIsWhitelistEnabled = !mIsWhitelistEnabled;
-                    submitCommand("whitelist " + (mIsWhitelistEnabled ? "on" : "off"));
-                    updateWhitelistToggleUI();
-                    I18n.makeText(MainActivity.this, I18n.t("app.whitelist_impostata", (mIsWhitelistEnabled ? "ON" : "OFF")), Toast.LENGTH_SHORT).show();
+                    // Prima l'errore si nascondeva: stato invertito sul telefono, comando in console e messaggio di
+                    // successo anche se la whitelist non era cambiata
+                    I18n.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
+                    fetchPlayersAndWhitelist();
                 }
             });
         } else if (id == R.id.btnWhitelistAdd) {
@@ -1364,7 +1365,38 @@ public class MainActivity extends Activity implements View.OnClickListener {
     }
 
     private void executeApiCall(final String endpoint, final String method, final String jsonBody, final ApiClient.ApiCallback callback) {
-        executeApiCallInternal(endpoint, method, jsonBody, false, uiSafe(callback));
+        executeApiCallInternal(endpoint, method, jsonBody, false, errorBodyAware(uiSafe(callback)));
+    }
+
+    /**
+     * Il PC segnala molti errori con il codice 200 e {"status": "error", "message": "..."}: prima l'app li trattava
+     * come riusciti (editor dei file aperto vuoto e poi salvato sopra il file vero, "Salvato con successo", "Arresto
+     * inviato" a server già spento). Ora arrivano come errore con il messaggio del PC.
+     */
+    private static ApiClient.ApiCallback errorBodyAware(final ApiClient.ApiCallback callback) {
+        return new ApiClient.ApiCallback() {
+            @Override
+            public void onSuccess(String response) {
+                String trimmed = response != null ? response.trim() : "";
+                if (trimmed.startsWith("{")) {
+                    try {
+                        JSONObject obj = new JSONObject(trimmed);
+                        if ("error".equals(obj.optString("status", ""))) {
+                            String msg = obj.optString("message", "");
+                            callback.onError(msg.isEmpty() ? I18n.t("app.errore_segnalato_dal_pc") : I18n.fromPc(msg));
+                            return;
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
+                callback.onSuccess(response);
+            }
+
+            @Override
+            public void onError(String error) {
+                callback.onError(error);
+            }
+        };
     }
 
     /** Risposta del PC arrivata quando la schermata è già chiusa (app chiusa, tema chiaro/scuro cambiato durante una
@@ -1438,9 +1470,12 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
             @Override
             public void onError(final String error) {
-                if (error != null && error.matches("(?s)HTTP 4\\d\\d:.*") && !error.startsWith("HTTP 401") && !error.startsWith("HTTP 403")) {
-                    // Il PC ha risposto con un errore (es. "spegni prima il server"): è raggiungibile, quindi niente
-                    // passaggio all'altro indirizzo; prima si cambiava indirizzo a ogni errore e si ripeteva la richiesta
+                boolean authError = error != null && (error.startsWith("HTTP 401") || error.startsWith("HTTP 403"));
+                if (ApiClient.isFinalError(error) && (!authError || isRetry || "/api/auth/verify".equals(endpoint))) {
+                    // Il PC ha risposto con un errore (es. "spegni prima il server", errore interno, PIN cambiato sul
+                    // PC) o ha ricevuto il comando senza rispondere in tempo: è raggiungibile, quindi niente passaggio
+                    // all'altro indirizzo e niente ripetizione. Prima un 5xx, un ritardo o il PIN rifiutato facevano
+                    // cambiare indirizzo e mandare di nuovo la stessa azione fino a 3 volte
                     callback.onError(error);
                     return;
                 }
@@ -1470,7 +1505,12 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
                         @Override
                         public void onError(String errRemote) {
-                            if (!isRetry && errRemote != null && (errRemote.contains("401") || errRemote.contains("403")) && !"/api/auth/verify".equals(endpoint)) {
+                            boolean auth2 = errRemote != null && (errRemote.startsWith("HTTP 401") || errRemote.startsWith("HTTP 403"));
+                            if (ApiClient.isFinalError(errRemote) && (!auth2 || isRetry || "/api/auth/verify".equals(endpoint))) {
+                                callback.onError(errRemote);
+                                return;
+                            }
+                            if (!isRetry && auth2 && !"/api/auth/verify".equals(endpoint)) {
                                 mAuthToken = "";
                                 getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().remove(PREF_AUTH_TOKEN).apply();
                                 ensureAuthToken(new Runnable() {
@@ -1508,7 +1548,12 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
                         @Override
                         public void onError(String err2) {
-                            if (!isRetry && err2 != null && (err2.contains("401") || err2.contains("403")) && !"/api/auth/verify".equals(endpoint)) {
+                            boolean auth2 = err2 != null && (err2.startsWith("HTTP 401") || err2.startsWith("HTTP 403"));
+                            if (ApiClient.isFinalError(err2) && (!auth2 || isRetry || "/api/auth/verify".equals(endpoint))) {
+                                callback.onError(err2);
+                                return;
+                            }
+                            if (!isRetry && auth2 && !"/api/auth/verify".equals(endpoint)) {
                                 mAuthToken = "";
                                 getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().remove(PREF_AUTH_TOKEN).apply();
                                 ensureAuthToken(new Runnable() {
@@ -1600,6 +1645,9 @@ public class MainActivity extends Activity implements View.OnClickListener {
             mNetworkCallback = new ConnectivityManager.NetworkCallback() {
                 @Override
                 public void onCapabilitiesChanged(Network network, NetworkCapabilities caps) {
+                    // Conta solo la rete che il telefono usa davvero: con il Wi-Fi acceso anche i dati mobili restano
+                    // collegati e prima i loro avvisi facevano passare l'app a internet pur essendo in casa
+                    if (!network.equals(activeNetwork())) return;
                     // Arriva spesso anche senza cambiare rete (es. velocità del Wi-Fi): il PC di casa va riconosciuto
                     // di nuovo solo su una rete diversa
                     if (!network.equals(mLastNetwork)) {
@@ -1610,14 +1658,17 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 }
                 @Override
                 public void onLost(Network network) {
+                    // Prima a ogni rete persa (anche i dati mobili dopo il collegamento al Wi-Fi di casa) si invertiva
+                    // il percorso casa/internet; ora si guarda quale rete resta attiva e si decide da quella
+                    if (!network.equals(mLastNetwork)) return;
                     mLastNetwork = null;
                     mLocalVerifiedUrl = "";
-                    runOnUiThread(new Runnable() {
+                    mPollHandler.postDelayed(new Runnable() {
                         @Override
                         public void run() {
-                            testNetworkFailoverAuto();
+                            reevaluateActiveNetwork();
                         }
-                    });
+                    }, 1000);
                 }
             };
             cm.registerNetworkCallback(request, mNetworkCallback);
@@ -1694,12 +1745,24 @@ public class MainActivity extends Activity implements View.OnClickListener {
         } catch (Exception ignored) {}
     }
 
-    private void testNetworkFailoverAuto() {
-        if (mConnMode != 0) return;
-        mIsUsingRemote = !mIsUsingRemote;
-        savePreferences();
-        updateRoutePillUI();
-        fetchStatus();
+    private Network activeNetwork() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            return cm != null ? cm.getActiveNetwork() : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Dopo la perdita di una rete: si sceglie il percorso in base alla rete rimasta attiva (nessuna: si aspetta). */
+    private void reevaluateActiveNetwork() {
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getSystemService(CONNECTIVITY_SERVICE);
+            Network net = cm != null ? cm.getActiveNetwork() : null;
+            if (net == null) return;
+            mLastNetwork = net;
+            evaluateNetworkRoute(cm.getNetworkCapabilities(net));
+        } catch (Exception ignored) {}
     }
 
     private void syncUrlsFromNtfy(final boolean showToast, final Runnable onDone) {
@@ -1915,7 +1978,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
                     JSONObject obj = new JSONObject(response);
                     String state = obj.optString("state", "OFFLINE");
                     mServerState = state;
-                    if (mBackupAfterStop && ("STOPPED".equalsIgnoreCase(state) || "OFFLINE".equalsIgnoreCase(state))) {
+                    if (mBackupAfterStop && ("STOPPED".equalsIgnoreCase(state) || "OFFLINE".equalsIgnoreCase(state) || "CRASHED".equalsIgnoreCase(state))) {
                         mBackupAfterStop = false;
                         startBackupAction();
                     } else if ("CRASHED".equalsIgnoreCase(state) || "ONLINE".equalsIgnoreCase(state)) {
@@ -2180,6 +2243,9 @@ public class MainActivity extends Activity implements View.OnClickListener {
         }
     }
 
+    private String mPlayersListSignature = "";
+    private final java.util.Map<String, android.graphics.Bitmap> mAvatarCache = new java.util.HashMap<>();
+
     private void fetchPlayersAndWhitelist() {
         executeApiCall("/api/status", "GET", null, new ApiClient.ApiCallback() {
             @Override
@@ -2195,6 +2261,11 @@ public class MainActivity extends Activity implements View.OnClickListener {
                             players.put(it instanceof JSONObject ? ((JSONObject) it).optString("name", "") : String.valueOf(it));
                         }
                     }
+                    // Stessi giocatori dell'ultima lettura: la lista resta com'è. Prima ogni 2,5 s si ricostruiva e si
+                    // riscaricavano tutte le teste, che lampeggiavano sull'icona dell'app
+                    String signature = players.toString();
+                    if (signature.equals(mPlayersListSignature) && layoutPlayersList.getChildCount() > 0) return;
+                    mPlayersListSignature = signature;
                     layoutPlayersList.removeAllViews();
 
                     if (players != null && players.length() > 0) {
@@ -2215,11 +2286,13 @@ public class MainActivity extends Activity implements View.OnClickListener {
                             LinearLayout.LayoutParams imgLp = new LinearLayout.LayoutParams(dpToPx(30), dpToPx(30));
                             imgLp.setMargins(0, 0, dpToPx(10), 0);
                             imgAvatar.setLayoutParams(imgLp);
-                            imgAvatar.setImageResource(R.drawable.ic_launcher);
+                            final String targetPlayerName = pName;
+                            android.graphics.Bitmap cached = mAvatarCache.get(targetPlayerName);
+                            if (cached != null) imgAvatar.setImageBitmap(cached);
+                            else imgAvatar.setImageResource(R.drawable.ic_launcher);
                             row.addView(imgAvatar);
 
-                            final String targetPlayerName = pName;
-                            new Thread(new Runnable() {
+                            if (cached == null) new Thread(new Runnable() {
                                 @Override
                                 public void run() {
                                     try {
@@ -2236,6 +2309,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
                                                 runOnUiThread(new Runnable() {
                                                     @Override
                                                     public void run() {
+                                                        mAvatarCache.put(targetPlayerName, bmp);
                                                         imgAvatar.setImageBitmap(bmp);
                                                     }
                                                 });
@@ -2526,7 +2600,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
                     fetchPlayersAndWhitelist();
                 }
                 @Override public void onError(String error) {
-                    submitCommand("whitelist remove " + playerName);
+                    I18n.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
                     fetchPlayersAndWhitelist();
                 }
             });
@@ -2751,7 +2825,11 @@ public class MainActivity extends Activity implements View.OnClickListener {
         getSharedPreferences("server_gamerules", MODE_PRIVATE).edit().putBoolean(key, value).apply();
     }
 
+    /** server.properties letto dal PC: finché non lo è, i campi hanno valori predefiniti e non si possono salvare. */
+    private boolean mPropertiesLoaded = false;
+
     private void fetchProperties() {
+        mPropertiesLoaded = false;
         executeApiCall("/api/server/properties", "GET", null, new ApiClient.ApiCallback() {
             @Override
             public void onSuccess(String response) {
@@ -2759,7 +2837,12 @@ public class MainActivity extends Activity implements View.OnClickListener {
                     JSONObject obj = new JSONObject(response);
                     final JSONObject props = obj.optJSONObject("properties");
                     final boolean backupExists = obj.optBoolean("backup_exists", false);
-                    if (props != null) {
+                    if (props == null || props.length() == 0) {
+                        // File mancante o vuoto: il PC risponde con un elenco vuoto, i campi resterebbero ai valori predefiniti
+                        I18n.makeText(MainActivity.this, I18n.t("app.errore_lettura", "server.properties", I18n.t("app.errore_segnalato_dal_pc")), Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    {
                         final String diff = props.optString("difficulty", "normal");
                         final int viewDist = props.optInt("view-distance", 8);
                         final String motd = props.optString("motd", "Server Minecraft Moddato Forge");
@@ -2775,12 +2858,15 @@ public class MainActivity extends Activity implements View.OnClickListener {
                                 if (btnRestorePropertiesBak != null) {
                                     btnRestorePropertiesBak.setVisibility(backupExists ? View.VISIBLE : View.GONE);
                                 }
+                                mPropertiesLoaded = true;
                             }
                         });
                     }
                 } catch (Exception ignored) {}
             }
-            @Override public void onError(String error) {}
+            @Override public void onError(String error) {
+                I18n.makeText(MainActivity.this, I18n.t("app.errore_lettura", "server.properties", error), Toast.LENGTH_LONG).show();
+            }
         });
     }
 
@@ -2814,6 +2900,13 @@ public class MainActivity extends Activity implements View.OnClickListener {
     }
 
     private void saveProperties() {
+        if (!mPropertiesLoaded) {
+            // Prima si salvavano i valori predefiniti (nome, giocatori massimi, difficoltà, distanza visiva) al posto
+            // di quelli veri se il caricamento non era finito o era fallito
+            I18n.makeText(this, I18n.t("app.impostazioni_non_ancora_lette"), Toast.LENGTH_LONG).show();
+            fetchProperties();
+            return;
+        }
         try {
             String motd = (edtPropertiesMotd != null) ? edtPropertiesMotd.getText().toString().trim() : I18n.t("app.server_minecraft");
             if (motd.isEmpty()) motd = I18n.t("app.server_minecraft");
@@ -3025,6 +3118,10 @@ public class MainActivity extends Activity implements View.OnClickListener {
                         @Override
                         public void run() {
                             txtConsoleLogs.append(I18n.t("app.errore_esecuzione", error));
+                            // Comandi dati fuori dalla console (op, kick, ban dalla lista giocatori): l'errore si vede
+                            if (viewConsole.getVisibility() != View.VISIBLE) {
+                                I18n.makeText(MainActivity.this, error, Toast.LENGTH_LONG).show();
+                            }
                         }
                     });
                 }
@@ -3512,7 +3609,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
     // ================= BACKUP & REAL-TIME PROGRESS BAR =================
 
     private void startBackupAction() {
-        if (!"OFFLINE".equalsIgnoreCase(mServerState) && !"STOPPED".equalsIgnoreCase(mServerState)) {
+        if (!isServerStoppedForSwitch()) {   // CRASHED conta come spento: dopo un crash serve proprio il ripristino
             new I18n.Builder(this)
                 .setTitle(I18n.t("app.server_attivo_2"))
                 .setMessage(I18n.t("app.effettuare_backup_senza_corrompere"))
@@ -3809,7 +3906,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
     }
 
     private void startRestoreAction() {
-        if (!"OFFLINE".equalsIgnoreCase(mServerState) && !"STOPPED".equalsIgnoreCase(mServerState)) {
+        if (!isServerStoppedForSwitch()) {   // CRASHED conta come spento: dopo un crash serve proprio il ripristino
             new I18n.Builder(this)
                 .setTitle(I18n.t("app.server_attivo_2"))
                 .setMessage(I18n.t("app.ripristinare_mondo_modo_sicuro_senza"))
@@ -3983,6 +4080,16 @@ public class MainActivity extends Activity implements View.OnClickListener {
         }
     }
 
+    private boolean mBackupPollScheduled = false;
+    private boolean mActivityResumed = false;   // app in sottofondo: niente controllo del backup ogni secondo
+    private final Runnable mBackupPollRunnable = new Runnable() {
+        @Override
+        public void run() {
+            mBackupPollScheduled = false;
+            if (!isFinishing()) fetchBackupStatus();
+        }
+    };
+
     private void fetchBackupStatus() {
         executeApiCall("/api/backup/status", "GET", null, new ApiClient.ApiCallback() {
             @Override
@@ -4085,14 +4192,13 @@ public class MainActivity extends Activity implements View.OnClickListener {
                         }
                         txtBackupInfo.setText(sb.toString().trim());
 
-                        mPollHandler.postDelayed(new Runnable() {
-                            @Override
-                            public void run() {
-                                if (!isFinishing()) {
-                                    fetchBackupStatus();
-                                }
-                            }
-                        }, 1000);
+                        // Un solo controllo in attesa: prima ogni risposta ne programmava uno nuovo e anche il giro
+                        // ogni 2,5 s ne avviava altri, così durante un backup lungo le richieste al PC si moltiplicavano
+                        mPollHandler.removeCallbacks(mBackupPollRunnable);
+                        if (mActivityResumed) {
+                            mBackupPollScheduled = true;
+                            mPollHandler.postDelayed(mBackupPollRunnable, 1000);
+                        }
                     } else {
                         String err = obj.optString("error", "");
                         boolean completed = !obj.isNull("completed_at") && obj.optInt("percent", 0) >= 100 && (err.isEmpty() || "null".equals(err));
@@ -4422,7 +4528,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
     }
 
     private void actionSaveJvmTuning() {
-        if (!"OFFLINE".equalsIgnoreCase(mServerState) && !"STOPPED".equalsIgnoreCase(mServerState)) {
+        if (!isServerStoppedForSwitch()) {   // anche CRASHED (server già chiuso)
             new I18n.Builder(this)
                 .setTitle(I18n.t("app.modifica_parametri_java"))
                 .setMessage(I18n.t("app.parametri_ram_flag_jvm_vengono"))
@@ -4688,6 +4794,11 @@ public class MainActivity extends Activity implements View.OnClickListener {
                         public void run() {
                             try {
                                 JSONObject obj = new JSONObject(response);
+                                if (!obj.has("content")) {
+                                    // Senza il contenuto letto non si apre l'editor: salvando si sostituirebbe il file con uno vuoto
+                                    I18n.makeText(MainActivity.this, I18n.t("app.errore_lettura", filePath, I18n.t("app.errore_segnalato_dal_pc")), Toast.LENGTH_LONG).show();
+                                    return;
+                                }
                                 final String content = obj.optString("content", "");
 
                                 final EditText editor = new EditText(MainActivity.this);
@@ -4985,7 +5096,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 } else if (viewChat.getVisibility() == View.VISIBLE) {
                     fetchChat();
                 } else if (viewSettings.getVisibility() == View.VISIBLE) {
-                    fetchBackupStatus();
+                    if (!mBackupPollScheduled) fetchBackupStatus();   // backup in corso: lo segue già il controllo ogni secondo
                 }
                 // Fuori dalla Home lo stato del server si rileggeva mai: l'intestazione restava su "Arresto..." e il
                 // backup credeva il server ancora acceso. Ogni 3 giri (7,5 s), o a ogni giro dopo un comando.
@@ -5002,7 +5113,10 @@ public class MainActivity extends Activity implements View.OnClickListener {
     @Override
     protected void onPause() {
         super.onPause();
+        mActivityResumed = false;
         mPollHandler.removeCallbacks(mPollRunnable);
+        mPollHandler.removeCallbacks(mBackupPollRunnable);
+        mBackupPollScheduled = false;
     }
 
     @Override
@@ -5409,6 +5523,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
     @Override
     protected void onResume() {
         super.onResume();
+        mActivityResumed = true;
         if (mIsAuthenticated) {
             startPolling();
         }
@@ -5506,7 +5621,10 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        progressDialog.dismiss();
+                        // Schermata ricreata durante il download (es. cambio tema chiaro/scuro): la finestra di
+                        // avanzamento appartiene a quella vecchia e chiuderla o installare da lì faceva chiudere l'app
+                        if (isFinishing() || isDestroyed()) return;
+                        try { progressDialog.dismiss(); } catch (Exception ignored) {}
                         if (finalApk != null && finalApk.exists() && finalApk.length() > 0) {
                             checkPermissionAndInstall(finalApk);
                         } else {
