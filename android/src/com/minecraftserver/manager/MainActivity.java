@@ -58,8 +58,8 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends Activity implements View.OnClickListener {
 
-    public static final int CURRENT_VERSION_CODE = 112;
-    public static final String CURRENT_VERSION_NAME = "4.13.6";
+    public static final int CURRENT_VERSION_CODE = 113;
+    public static final String CURRENT_VERSION_NAME = "4.13.7";
 
     private int dpToPx(int dp) {
         return Math.round(dp * getResources().getDisplayMetrics().density);
@@ -683,7 +683,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
             public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
                 if (actionId == EditorInfo.IME_ACTION_SEND ||
                     (event != null && event.getKeyCode() == KeyEvent.KEYCODE_ENTER && event.getAction() == KeyEvent.ACTION_DOWN)) {
-                    submitCommand(edtCommand.getText().toString());
+                    if (submitCommand(edtCommand.getText().toString())) edtCommand.setText("");
                     return true;
                 }
                 return false;
@@ -980,7 +980,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
         // Console Actions
         else if (id == R.id.btnSendCommand) {
-            submitCommand(edtCommand.getText().toString());
+            if (submitCommand(edtCommand.getText().toString())) edtCommand.setText("");
         } else if (id == R.id.btnClearConsole) {
             actionClearLogs();
         } else if (id == R.id.btnLogFilterAll) {
@@ -1583,8 +1583,10 @@ public class MainActivity extends Activity implements View.OnClickListener {
                         @Override
                         public void run() {
                             String freshBase = getEffectiveBaseUrl();
-                            if (freshBase != null && !freshBase.equalsIgnoreCase(base)) {
-                                ApiClient.call(freshBase + endpoint, method, jsonBody, mAuthToken, callback);
+                            if (!isRetry && freshBase != null && !freshBase.equalsIgnoreCase(base)) {
+                                // Passa di nuovo dal controllo del PC di casa: il nuovo indirizzo in chiaro potrebbe
+                                // essere un altro dispositivo (prima il token partiva subito)
+                                executeApiCallInternal(endpoint, method, jsonBody, true, callback);
                             } else {
                                 callback.onError(error);
                             }
@@ -3054,11 +3056,17 @@ public class MainActivity extends Activity implements View.OnClickListener {
         executeApiCall("/api/timer/reset", "POST", "{}", new ApiClient.ApiCallback() {
             @Override
             public void onSuccess(String response) {
+                String formatted = "";
+                try {
+                    formatted = new JSONObject(response).optString("formatted", "");
+                } catch (Exception ignored) {}
+                final String left = formatted;
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
                         vibrate(30);
-                        I18n.makeText(MainActivity.this, I18n.t("app.timer_reimpostato_4_ore"), Toast.LENGTH_SHORT).show();
+                        I18n.makeText(MainActivity.this, left.isEmpty() ? I18n.t("app.timer_reimpostato")
+                            : I18n.t("app.timer_reimpostato_prossimo_riavvio", left), Toast.LENGTH_SHORT).show();
                         fetchStatus();
                     }
                 });
@@ -3077,17 +3085,21 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
     // ================= CONSOLE & COMMANDS =================
 
-    private void submitCommand(String cmd) {
-        if (cmd == null || cmd.trim().isEmpty()) return;
+    /**
+     * Manda un comando al server; false se non è partito (server spento). Il campo della console lo svuota chi lo
+     * chiama dalla console: prima si svuotava anche per i comandi dati da altre schermate (save-all, messaggio a un
+     * giocatore), cancellando quello che si stava scrivendo.
+     */
+    private boolean submitCommand(String cmd) {
+        if (cmd == null || cmd.trim().isEmpty()) return false;
         final String commandStr = cmd.trim();
 
         if (!"ONLINE".equalsIgnoreCase(mServerState)) {
             vibrate(30);
             I18n.makeText(this, I18n.t("app.server_deve_essere_online_inviare"), Toast.LENGTH_SHORT).show();
-            return;
+            return false;
         }
 
-        edtCommand.setText("");
         vibrate(25);
 
         String currentLogs = txtConsoleLogs.getText().toString();
@@ -3127,6 +3139,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 }
             });
         } catch (Exception ignored) {}
+        return true;
     }
 
     private void fetchLogs() {
@@ -3494,7 +3507,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
                             }
                             sb.append(sender).append(": ").append(text).append("\n");
                             if (reply != null && !reply.trim().isEmpty() && !"null".equalsIgnoreCase(reply.trim())) {
-                                sb.append((I18n.t("app.sistema") + " ")).append(reply.trim()).append("\n");
+                                sb.append((I18n.t("app.sistema") + " ")).append(I18n.fromPc(reply.trim())).append("\n");
                             }
                         }
                         final String chatContent = sb.toString().trim();
@@ -3553,19 +3566,15 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 }
                 @Override
                 public void onError(final String error) {
-                    // Fallback a comando console standard
-                    submitCommand("say " + text);
-                    runOnUiThread(new Runnable() {
-                        @Override
-                        public void run() {
-                            I18n.makeText(MainActivity.this, I18n.t("app.messaggio_inviato_via_console_fallback"), Toast.LENGTH_SHORT).show();
-                            fetchChat(true);
-                        }
-                    });
+                    // Prima si rimandava il messaggio come "say" in console: doppio se il PC aveva ricevuto il primo
+                    // (risposta in ritardo) e "inviato" anche a server spento, con il testo scritto perso
+                    if (edtChatText != null && edtChatText.getText().toString().trim().isEmpty()) edtChatText.setText(text);
+                    I18n.makeText(MainActivity.this, I18n.t("app.messaggio_chat_non_inviato", error), Toast.LENGTH_LONG).show();
+                    fetchChat(true);
                 }
             });
         } catch (Exception e) {
-            submitCommand("say " + text);
+            edtChatText.setText(text);
         }
     }
 
@@ -5490,7 +5499,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
             if (nm == null) return;
 
             Intent intent = new Intent(this, MainActivity.class);
-            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             intent.putExtra("check_update", true);
 
             int flags = PendingIntent.FLAG_UPDATE_CURRENT;

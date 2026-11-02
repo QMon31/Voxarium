@@ -83,14 +83,23 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Novità per telefono (v4.13.6)"
-                android:tag="t:ui.novita_telefono|v4.13.6"
+                android:text="Novità per telefono (v4.13.7)"
+                android:tag="t:ui.novita_telefono|v4.13.7"
                 android:textColor="#f4f4f5"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
 
             <!-- CONTENUTO NOVITÀ TELEFONO -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Novità (v4.13.7): correzioni. In chat un messaggio non riuscito non viene più rimandato dalla console (niente messaggi doppi o falsi inviato) e resta nel campo; le risposte del PC in chat sono tradotte; la notifica di aggiornamento non riapre più l'app da capo; Reimposta timer dice il tempo vero; la console non cancella più quello che stai scrivendo; il widget avvisa quando un comando viene rifiutato per il PIN; più sicurezza quando il PC cambia indirizzo di casa."
+                    android:tag="t:ui.novita_v4_13_7_correzioni"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -256,6 +265,16 @@
                 android:background="#0f0f11"
                 android:padding="12dp"
                 android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="• v4.13.7 (Build 113):
+Correzioni: chat, notifica di aggiornamento, timer, console, widget e cambio di indirizzo del PC."
+                    android:tag="t:ui.v4_13_7_build_113_correzioni"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="4dp" />
 
                 <TextView
                     android:layout_width="match_parent"

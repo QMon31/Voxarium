@@ -1,8 +1,8 @@
 {
-  "version_code": 112,
-  "version_name": "4.13.6",
+  "version_code": 113,
+  "version_name": "4.13.7",
   "download_url": "/static/Controllo_Server_Minecraft.apk",
-  "release_notes": "Correzioni: durante un backup l'app non moltiplica piu' le richieste al PC; widget 'Non raggiungibile' a PC spento; niente falsi avvisi di aggiornamento; notifiche alla sezione giusta; errori del PC non piu' mostrati come riusciti (editor dei file non piu' vuoto); backup dopo un crash; azioni non ripetute; PIN cambiato e cambi di rete; giocatori, whitelist e server.properties.",
+  "release_notes": "Correzioni: in chat un messaggio non riuscito non viene piu' rimandato due volte e le risposte del PC sono tradotte; la notifica di aggiornamento non riapre l'app da capo; il timer dice il tempo vero; la console non cancella il testo che stai scrivendo; il widget avvisa quando il PIN viene rifiutato.",
   "min_sdk": 26,
   "target_sdk": 35
 }

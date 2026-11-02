@@ -232,7 +232,7 @@ public class ServerWidgetProvider extends AppWidgetProvider {
         try {
             String baseUrl = getBaseUrl(context);
             if (baseUrl.isEmpty()) {
-                showUnreachable(context);
+                showUnreachable(context, false);
                 return null;
             }
             URL url = new URL(baseUrl + "/api/status");
@@ -283,7 +283,7 @@ public class ServerWidgetProvider extends AppWidgetProvider {
             conn.disconnect();
         } catch (Exception ignored) {}
         // PC spento o non raggiungibile: prima restava lo stato precedente (o "Online" del layout), anche a PC spento
-        if (state == null) showUnreachable(context);
+        if (state == null) showUnreachable(context, false);
         return state;
     }
 
@@ -298,7 +298,7 @@ public class ServerWidgetProvider extends AppWidgetProvider {
                 try {
                     String baseUrl = getBaseUrl(context);
                     if (baseUrl.isEmpty()) {
-                        showUnreachable(context);
+                        showUnreachable(context, false);
                         return;
                     }
                     String token = getOrFetchAuthToken(context, baseUrl);
@@ -342,8 +342,13 @@ public class ServerWidgetProvider extends AppWidgetProvider {
                             os2.write(jsonBody.getBytes(StandardCharsets.UTF_8));
                             os2.close();
                         }
-                        retryConn.getResponseCode();
+                        int retryCode = retryConn.getResponseCode();
                         retryConn.disconnect();
+                        if (retryCode == 401 || retryCode == 403) {
+                            // PIN cambiato sul PC: il comando non è partito (prima non lo diceva niente)
+                            showUnreachable(context, true);
+                            return;
+                        }
                     }
 
                     // Il server impiega da qualche secondo a qualche minuto ad accendersi o spegnersi: lo stato si rilegge
@@ -365,14 +370,18 @@ public class ServerWidgetProvider extends AppWidgetProvider {
         }).start();
     }
 
-    /** Il PC non risponde: stato grigio (widget.non_raggiungibile) invece dell'ultimo stato letto. */
-    private static void showUnreachable(Context context) {
+    /**
+     * Il PC non risponde: stato grigio (widget.non_raggiungibile) invece dell'ultimo stato letto. Se un comando del
+     * widget viene rifiutato (PIN cambiato sul PC) lo si dice (widget.pin_da_aggiornare): lo stato si legge anche
+     * senza PIN, quindi lì non succede.
+     */
+    private static void showUnreachable(Context context, boolean authRejected) {
         AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
         int[] allWidgetIds = appWidgetManager.getAppWidgetIds(new ComponentName(context, ServerWidgetProvider.class));
         if (allWidgetIds == null || allWidgetIds.length == 0) return;
         I18n.ensure(context);
         RemoteViews views = new RemoteViews(context.getPackageName(), R.layout.widget_server_control);
-        views.setTextViewText(R.id.widget_status_pill, I18n.t("widget.non_raggiungibile"));
+        views.setTextViewText(R.id.widget_status_pill, I18n.t(authRejected ? "widget.pin_da_aggiornare" : "widget.non_raggiungibile"));
         views.setTextColor(R.id.widget_status_pill, Color.parseColor("#9a9ca2"));
         views.setTextViewText(R.id.widget_players, I18n.t("widget.giocatori"));
         views.setTextViewText(R.id.widget_ram, "RAM: -- GB");

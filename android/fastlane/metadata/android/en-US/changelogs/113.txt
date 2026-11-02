@@ -1,0 +1,1 @@
+Fixes: chat (no double messages, PC replies translated), update notification, restart timer, console, widget with a refused PIN and PC address change.

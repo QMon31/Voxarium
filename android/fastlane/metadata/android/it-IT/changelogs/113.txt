@@ -1,0 +1,1 @@
+Correzioni: chat (niente messaggi doppi, risposte del PC tradotte), notifica di aggiornamento, timer di riavvio, console, widget con PIN rifiutato e cambio di indirizzo del PC.
