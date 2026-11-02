@@ -83,14 +83,23 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Novità per telefono (v4.13.4)"
-                android:tag="t:ui.novita_telefono|v4.13.4"
+                android:text="Novità per telefono (v4.13.5)"
+                android:tag="t:ui.novita_telefono|v4.13.5"
                 android:textColor="#f4f4f5"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
 
             <!-- CONTENUTO NOVITÀ TELEFONO -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Novità (v4.13.5): l'app riconosce il PC di casa con una prova che solo il tuo PC sa calcolare: chi è stato collegato una volta alla tua rete di casa non può più fingersi il PC su un altro Wi-Fi per farsi mandare il PIN. Serve il programma PC 4.23.2."
+                    android:tag="t:ui.novita_v4_13_5_prova_app"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -238,6 +247,16 @@
                 android:background="#0f0f11"
                 android:padding="12dp"
                 android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="• v4.13.5 (Build 111):
+PC di casa riconosciuto con una prova che solo lui sa calcolare (PC 4.23.2)."
+                    android:tag="t:ui.v4_13_5_build_111_prova_app"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="4dp" />
 
                 <TextView
                     android:layout_width="match_parent"

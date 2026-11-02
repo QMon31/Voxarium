@@ -440,7 +440,8 @@ class InternetAccessTest(unittest.TestCase):
             src = fh.read()
         wanted = ("is_internet_request", "is_local_request", "verify_admin_access", "pin_is_default",
                   "has_admin_access", "hide_private_paths", "is_public_client_ip", "public_network_payload",
-                  "host_is_direct_address", "_host_id", "_host_proof_key", "_host_proof", "get_status")
+                  "host_is_direct_address", "_host_id", "_host_proof_key", "_host_proof", "_app_proof", "get_status",
+                  "get_discovery")
         fns = [n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name in wanted]
         for n in fns:
             n.decorator_list = []                    # @app.get(...): qui serve solo la funzione
@@ -460,7 +461,8 @@ class InternetAccessTest(unittest.TestCase):
 
         cls.HTTPException = HTTPException
         import socket
-        cls.ns = {"socket": socket, "re": re, "REMOTE_PORT": 8443, "manager": Manager, "valid_auth_tokens": {"tok"}, "HTTPException": HTTPException,
+        remote = type("RA", (), {"fingerprint": "f" * 64, "url": "https://81.0.0.1:8443"})()
+        cls.ns = {"socket": socket, "re": re, "remote_access": remote, "REMOTE_PORT": 8443, "manager": Manager, "valid_auth_tokens": {"tok"}, "HTTPException": HTTPException,
                   "is_default_pin": is_default_pin, "DEFAULT_PIN_INTERNET_MSG": "", "Request": object,
                   "Dict": dict, "Any": object, "PRIVATE_PATH_KEYS": ("server_dir", "target_path", "cloud_sync_dir")}
         exec(compile(ast.Module(body=fns, type_ignores=[]), "app.py", "exec"), cls.ns)
@@ -533,6 +535,21 @@ class InternetAccessTest(unittest.TestCase):
         self.assertIn("chat", with_token)
         self.assertIn("errors", status(8080, "127.0.0.1"))                       # PC Host
         self.assertNotIn("host_proof", status(8080, "192.168.1.20", n="x'<"))    # domanda non valida
+
+        # Prova per l'app con una chiave diversa, che /api/discovery non dà mai
+        app_key = hmac.new(("ab" * 32).encode(), b"voxarium-app-proof-key", hashlib.sha256).digest()
+        self.assertEqual(home["host_proof_app"], hmac.new(app_key, ("host-proof|" + nonce).encode(), hashlib.sha256).hexdigest())
+        self.assertNotIn("host_proof_app", status(8443, "81.0.0.9", {"X-Admin-Token": "tok"}))
+        disc = self.ns["get_discovery"](self._req(8080, "192.168.1.20", {"host": "192.168.1.10:8080"}))
+        self.assertEqual(disc["proof_key"], key.hex())
+        self.assertNotIn(app_key.hex(), repr(disc))
+
+    def test_discovery_refuses_dns_rebinding_and_internet(self):
+        for req in (self._req(8080, "192.168.1.20", {"host": "sito-malevolo.com:8080"}),   # DNS rebinding
+                    self._req(8443, "192.168.1.20", {"host": "192.168.1.10:8443"}),         # porta da internet
+                    self._req(8080, "81.0.0.9", {"host": "192.168.1.10:8080"})):            # IP pubblico
+            with self.assertRaises(self.HTTPException):
+                self.ns["get_discovery"](req)
 
     def test_default_pin_blocks_internet(self):
         self.config["admin_pin"] = "1234"

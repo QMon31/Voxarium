@@ -58,8 +58,8 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends Activity implements View.OnClickListener {
 
-    public static final int CURRENT_VERSION_CODE = 110;
-    public static final String CURRENT_VERSION_NAME = "4.13.4";
+    public static final int CURRENT_VERSION_CODE = 111;
+    public static final String CURRENT_VERSION_NAME = "4.13.5";
 
     private int dpToPx(int dp) {
         return Math.round(dp * getResources().getDisplayMetrics().density);
@@ -5248,7 +5248,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
         if (!mLocalUrl.equalsIgnoreCase(oldLocal)) {
             // Indirizzo di casa cambiato a mano (magari un altro PC): si riconosce di nuovo al prossimo accesso col PIN
             getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().remove(PREF_PC_HOST_ID)
-                .remove(ApiClient.PREF_HOST_PROOF_SEEN).apply();
+                .remove(ApiClient.PREF_HOST_PROOF_SEEN).remove(ApiClient.PREF_APP_PROOF_SEEN).apply();
             mLocalVerifiedUrl = "";
         }
         if (edtAdminPin != null) {
@@ -5299,6 +5299,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
              .putBoolean(PREF_BIOMETRIC, true)
              .remove(PREF_PC_HOST_ID)   // configurazione nuova: il PC si riconosce al primo accesso col PIN
              .remove(ApiClient.PREF_HOST_PROOF_SEEN)
+             .remove(ApiClient.PREF_APP_PROOF_SEEN)
              .apply();
         mLocalVerifiedUrl = "";
 

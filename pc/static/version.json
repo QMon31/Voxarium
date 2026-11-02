@@ -1,8 +1,8 @@
 {
-  "version_code": 110,
-  "version_name": "4.13.4",
+  "version_code": 111,
+  "version_name": "4.13.5",
   "download_url": "/static/Controllo_Server_Minecraft.apk",
-  "release_notes": "Sicurezza sui Wi-Fi esterni: il PC di casa si riconosce con una prova segreta e PIN e codice di accesso non vanno più a un altro dispositivo; widget con il PIN 1234 in casa.",
+  "release_notes": "Il PC di casa si riconosce con una prova che solo il tuo PC sa calcolare: chi è stato sulla tua rete di casa non può fingersi il PC su un altro Wi-Fi (serve il programma PC 4.23.2).",
   "min_sdk": 26,
   "target_sdk": 35
 }

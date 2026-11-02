@@ -913,9 +913,9 @@ def _host_id() -> str:
     return hashlib.sha256(("host-id|" + str(manager.config.get("push_secret", ""))).encode("utf-8")).hexdigest()[:16]
 
 def _host_proof_key() -> bytes:
-    """Chiave con cui questo PC dimostra di essere lui a telefono e PC Remoti in rete locale. Deriva dal segreto ntfy:
-    l'app la calcola da quel segreto (ricevuto con il PIN), il Launcher la riceve da /api/discovery (solo rete di casa).
-    L'identificativo host_id invece si legge senza PIN, anche da internet, quindi da solo non prova niente."""
+    """Chiave con cui questo PC dimostra di essere lui ai PC Remoti in rete locale. Deriva dal segreto ntfy; il Launcher
+    la riceve da /api/discovery (solo rete di casa). L'app usa un'altra chiave (_app_proof). L'identificativo host_id
+    invece si legge senza PIN, anche da internet, quindi da solo non prova niente."""
     import hashlib, hmac
     return hmac.new(str(manager.config.get("push_secret", "")).encode("utf-8"), b"voxarium-host-proof-key",
                     hashlib.sha256).digest()
@@ -923,6 +923,15 @@ def _host_proof_key() -> bytes:
 def _host_proof(nonce: str) -> str:
     import hashlib, hmac
     return hmac.new(_host_proof_key(), ("host-proof|" + nonce).encode("utf-8"), hashlib.sha256).hexdigest()
+
+def _app_proof(nonce: str) -> str:
+    """Prova per l'app, con una chiave che il PC non dà mai: l'app la ricava dal segreto ntfy, che riceve solo con il
+    PIN. La chiave di _host_proof invece va ai PC Remoti da /api/discovery senza PIN, quindi chi è stato una volta
+    nella rete di casa (un ospite sul Wi-Fi) poteva poi fingersi il PC per l'app su un altro Wi-Fi."""
+    import hashlib, hmac
+    key = hmac.new(str(manager.config.get("push_secret", "")).encode("utf-8"), b"voxarium-app-proof-key",
+                   hashlib.sha256).digest()
+    return hmac.new(key, ("host-proof|" + nonce).encode("utf-8"), hashlib.sha256).hexdigest()
 
 # Percorsi del PC (con il nome utente di Windows) che gli indirizzi pubblici mostrano solo a chi ha accesso
 PRIVATE_PATH_KEYS = ("server_dir", "target_path", "cloud_sync_dir")
@@ -973,6 +982,7 @@ def get_status(request: Request):
     nonce = request.query_params.get("nonce", "")
     if re.fullmatch(r"[0-9a-f]{16,64}", nonce) and not is_internet_request(request):
         st["host_proof"] = _host_proof(nonce)
+        st["host_proof_app"] = _app_proof(nonce)
     if not has_admin_access(request):
         # Chat, errori della console e ultimo crash solo con il PIN, come /api/chat e /api/errors: prima chiunque
         # (anche da internet) li leggeva qui, con percorsi del PC, nome utente di Windows e IP nelle righe di errore
@@ -992,7 +1002,10 @@ def get_discovery(request: Request):
         is_private = ipaddress.ip_address(client_ip).is_private
     except ValueError:
         is_private = False
-    if is_internet_request(request) or request.headers.get("x-forwarded-for") or not is_private:
+    # host_is_direct_address: una pagina web aperta in casa che fa puntare il proprio nome all'IP del PC (DNS rebinding)
+    # non legge topic e chiave della prova; i PC Remoti usano l'IP del PC
+    if (is_internet_request(request) or request.headers.get("x-forwarded-for") or not is_private
+            or not host_is_direct_address(request.headers)):
         raise HTTPException(status_code=403, detail="Disponibile solo dalla rete locale dell'Host.")
     return {"push_topic": manager.config.get("push_topic", ""), "host_id": _host_id(),
             "cert_fingerprint": remote_access.fingerprint, "remote_url": remote_access.url,

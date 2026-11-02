@@ -1,0 +1,1 @@
+The home PC is recognised with a proof only your PC can compute: someone who was on your home network can no longer pretend to be the PC on another Wi-Fi (needs PC program 4.23.2).

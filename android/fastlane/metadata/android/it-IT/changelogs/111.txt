@@ -1,0 +1,1 @@
+Il PC di casa si riconosce con una prova che solo il tuo PC sa calcolare: chi è stato sulla tua rete di casa non può fingersi il PC su un altro Wi-Fi (serve il programma PC 4.23.2).

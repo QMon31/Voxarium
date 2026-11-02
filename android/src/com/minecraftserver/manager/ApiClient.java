@@ -183,28 +183,42 @@ public class ApiClient {
         if (expectedHostId == null || expectedHostId.isEmpty()) return HOST_SAME;   // PC mai riconosciuto: come prima
         String seen = "";
         String proof = "";
+        String appProof = "";
         try {
             if (code == 200) {
                 org.json.JSONObject obj = new org.json.JSONObject(response);
                 seen = obj.optString("host_id", "");
                 proof = obj.optString("host_proof", "");
+                appProof = obj.optString("host_proof_app", "");
             }
         } catch (Exception ignored) {
         }
         if (!expectedHostId.equals(seen)) return HOST_OTHER;
         if (nonce.isEmpty()) return HOST_SAME;                         // segreto non ancora ricevuto (app vecchia)
+        // Prova con la chiave dell'app (PC 4.23.2 e successivi): il PC non la dà mai, a differenza di quella dei PC
+        // Remoti (host_proof), che chi è stato una volta nella rete di casa può leggere da /api/discovery
+        if (!appProof.isEmpty()) {
+            if (!proofMatches(secret, "voxarium-app-proof-key", nonce, appProof)) return HOST_OTHER;
+            if (!prefs.getBoolean(PREF_APP_PROOF_SEEN, false))
+                prefs.edit().putBoolean(PREF_APP_PROOF_SEEN, true).putBoolean(PREF_HOST_PROOF_SEEN, true).apply();
+            return HOST_SAME;
+        }
+        if (prefs.getBoolean(PREF_APP_PROOF_SEEN, false)) return HOST_OTHER;   // il nostro PC la manda sempre
         if (proof.isEmpty()) return prefs.getBoolean(PREF_HOST_PROOF_SEEN, false) ? HOST_OTHER : HOST_SAME;   // PC non aggiornato
-        if (!proofMatches(secret, nonce, proof)) return HOST_OTHER;
+        if (!proofMatches(secret, "voxarium-host-proof-key", nonce, proof)) return HOST_OTHER;
         if (!prefs.getBoolean(PREF_HOST_PROOF_SEEN, false)) prefs.edit().putBoolean(PREF_HOST_PROOF_SEEN, true).apply();
         return HOST_SAME;
     }
 
-    /** Prova del PC: HMAC-SHA256(chiave, "host-proof|" + nonce), chiave = HMAC-SHA256(segreto ntfy, "voxarium-host-proof-key"). */
-    static boolean proofMatches(String secret, String nonce, String proof) {
+    /** Il PC ha già risposto almeno una volta con la prova dell'app: da allora vale solo quella. */
+    static final String PREF_APP_PROOF_SEEN = "pc_app_proof_seen";
+
+    /** Prova del PC: HMAC-SHA256(chiave, "host-proof|" + nonce), chiave = HMAC-SHA256(segreto ntfy, label). */
+    static boolean proofMatches(String secret, String label, String nonce, String proof) {
         try {
             javax.crypto.Mac mac = javax.crypto.Mac.getInstance("HmacSHA256");
             mac.init(new javax.crypto.spec.SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
-            byte[] key = mac.doFinal("voxarium-host-proof-key".getBytes(StandardCharsets.UTF_8));
+            byte[] key = mac.doFinal(label.getBytes(StandardCharsets.UTF_8));
             mac.init(new javax.crypto.spec.SecretKeySpec(key, "HmacSHA256"));
             byte[] expected = mac.doFinal(("host-proof|" + nonce).getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
