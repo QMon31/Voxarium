@@ -113,12 +113,36 @@ def api_add_instance(req: AddInstanceRequest, request: Request):
     )
     if not res.get("success"):
         raise HTTPException(status_code=400, detail=res.get("error"))
-    if req.set_active:
+    if (res.get("instance") or {}).get("is_active"):
         try:
             backup_mgr.server_dir = manager.config.get("server_dir", "")
         except Exception:
             pass
+    if req.server_port or req.port:
+        # Porta scelta a mano: vale solo se è scritta anche in server.properties (come nella modifica). Prima l'elenco
+        # mostrava la porta scelta e Minecraft restava in ascolto su quella del file
+        inst_dir = (res.get("instance") or {}).get("server_dir", "")
+        if _properties_port(inst_dir) != int(eff_port):
+            try:
+                manager.write_port_to_properties(inst_dir, int(eff_port))
+            except Exception:
+                pass
+            request_minecraft_port_sync()
     return {"status": "success", **res}
+
+
+def _properties_port(server_dir: str):
+    """server-port scritto in server.properties della cartella (None se manca o non si legge)."""
+    try:
+        with open(os.path.join(server_dir, "server.properties"), "r", encoding="utf-8", errors="ignore") as f:
+            for line in f:
+                s = line.strip()
+                if s.startswith("server-port="):
+                    v = s.split("=", 1)[1].strip()
+                    return int(v) if v.isdigit() else None
+    except OSError:
+        pass
+    return None
 
 @router.post("/api/instances/update")
 def api_update_instance(req: UpdateInstanceRequest, request: Request):

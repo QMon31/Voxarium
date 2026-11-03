@@ -817,34 +817,39 @@ def update_mod_file(
                 pass
         return {"success": False, "error": f"Errore durante il download dell'aggiornamento: {e}"}
 
-    # 2. Check file lock / delete old file
-    if os.path.isfile(old_file_path):
+    def _is_lock_error(e: Exception) -> bool:
+        err_msg = str(e)
+        return "used by another process" in err_msg.lower() or "[WinError 32]" in err_msg or isinstance(e, PermissionError)
+
+    lock_msg = ("Impossibile aggiornare la mod: il file è bloccato dal processo Java del server Minecraft in esecuzione. "
+                "Arresta il server prima di aggiornare le mod.")
+
+    # 2. Prima la nuova versione al suo posto, poi si cancella la vecchia. Prima si cancellava la vecchia e poi si
+    # spostava la nuova: se lo spostamento non riusciva (es. antivirus sul file appena scaricato) la mod spariva
+    try:
+        os.replace(tmp_file_path, new_file_path)
+    except Exception as e:
+        if os.path.exists(tmp_file_path):
+            try:
+                os.remove(tmp_file_path)
+            except Exception:
+                pass
+        if _is_lock_error(e):
+            return {"success": False, "error": lock_msg}
+        return {"success": False, "error": f"Errore posizionamento file aggiornato '{new_filename}': {e}"}
+
+    # 3. Vecchia versione (con un altro nome): se non si cancella si toglie la nuova, per non avere la mod due volte
+    if os.path.normcase(old_file_path) != os.path.normcase(new_file_path) and os.path.isfile(old_file_path):
         try:
             os.remove(old_file_path)
         except Exception as e:
-            if os.path.exists(tmp_file_path):
-                try:
-                    os.remove(tmp_file_path)
-                except Exception:
-                    pass
-            err_msg = str(e)
-            if "used by another process" in err_msg.lower() or "[WinError 32]" in err_msg or isinstance(e, PermissionError):
-                return {
-                    "success": False,
-                    "error": "Impossibile aggiornare la mod: il file è bloccato dal processo Java del server Minecraft in esecuzione. Arresta il server prima di aggiornare le mod."
-                }
-            return {"success": False, "error": f"Errore eliminazione versione precedente '{current_filename}': {e}"}
-
-    # 3. Rename tmp to new file
-    try:
-        if os.path.exists(new_file_path):
             try:
                 os.remove(new_file_path)
             except Exception:
                 pass
-        os.replace(tmp_file_path, new_file_path)
-    except Exception as e:
-        return {"success": False, "error": f"Errore posizionamento file aggiornato '{new_filename}': {e}"}
+            if _is_lock_error(e):
+                return {"success": False, "error": lock_msg}
+            return {"success": False, "error": f"Errore eliminazione versione precedente '{current_filename}': {e}"}
 
     from file_manager import format_file_size
 

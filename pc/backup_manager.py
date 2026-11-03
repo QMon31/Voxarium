@@ -518,6 +518,12 @@ class BackupManager:
                         mtime = time.localtime(os.path.getmtime(full_p))[:6]
                     except Exception:
                         mtime = time.localtime()[:6]
+                    # Lo ZIP accetta solo date dal 1980 al 2107: prima un solo file più vecchio (es. estratto da un
+                    # archivio con data 0, cioè 1970) faceva fallire tutto il backup
+                    if mtime[0] < 1980:
+                        mtime = (1980, 1, 1, 0, 0, 0)
+                    elif mtime[0] > 2107:
+                        mtime = (2107, 12, 31, 23, 59, 58)
 
                     zinfo = zipfile.ZipInfo(filename=rel_p.replace('\\', '/'), date_time=mtime)
                     zinfo.compress_type = compress_type

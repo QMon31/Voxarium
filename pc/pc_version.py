@@ -1,7 +1,7 @@
 """Versione del programma PC: unica fonte usata dal backend, dal controllo aggiornamenti e dalla pubblicazione."""
 
-PC_VERSION = "4.23.2"
-PC_BUILD = 111  # +1 a ogni release pubblicata (come versionCode dell'APK)
+PC_VERSION = "4.23.3"
+PC_BUILD = 112  # +1 a ogni release pubblicata (come versionCode dell'APK)
 
 # Repository GitHub PUBBLICO che contiene solo gli installer; il codice resta nel repository privato
 UPDATE_REPO = "QMon31/Voxarium"

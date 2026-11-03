@@ -116,6 +116,7 @@ namespace MinecraftControlCenterInstaller
             new[] { "Registrazione disinstallatore in Windows...", "Registering the uninstaller in Windows...", "Registrando el desinstalador en Windows...", "Enregistrement du programme de désinstallation dans Windows...", "Deinstallationsprogramm wird in Windows registriert...", "Registrando o desinstalador no Windows..." },
             new[] { "Completato!", "Done!", "¡Completado!", "Terminé !", "Fertig!", "Concluído!" },
             new[] { "Nota durante l'installazione: {0}", "Note during setup: {0}", "Aviso durante la instalación: {0}", "Remarque pendant l'installation : {0}", "Hinweis während der Installation: {0}", "Aviso durante a instalação: {0}" },
+            new[] { "File del programma non aggiornati perché in uso: {0}. Riavvia il PC e ripeti l'aggiornamento.", "Program files not updated because they are in use: {0}. Restart the PC and run the update again.", "Archivos del programa no actualizados porque están en uso: {0}. Reinicia el PC y repite la actualización.", "Fichiers du programme non mis à jour car ils sont utilisés : {0}. Redémarrez le PC et relancez la mise à jour.", "Programmdateien nicht aktualisiert, weil sie verwendet werden: {0}. Starte den PC neu und wiederhole das Update.", "Arquivos do programa não atualizados porque estão em uso: {0}. Reinicie o PC e repita a atualização." },
             new[] { "Installazione", "Setup", "Instalación", "Installation", "Installation", "Instalação" },
 
             // Passo 5: fine

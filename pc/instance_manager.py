@@ -224,11 +224,19 @@ def add_instance(name: str, server_dir: str, server_run_bat: str = "", server_co
         for inst in instances:
             inst["is_active"] = False
         new_inst["is_active"] = True
+    elif new_inst["is_active"] and manager and getattr(manager, "state", "STOPPED") not in _SWITCH_OK_STATES:
+        # Cartella del server attivo aggiunta di nuovo a server acceso: come la modifica, cartella, avvio e porta non
+        # cambiano finché il server gira (config.json non si aggiorna)
+        if any(str(new_inst[k]) != str(same.get(k, "")) for k in ("server_dir", "server_run_bat", "server_command", "server_port")):
+            return {"success": False,
+                    "error": "Il server corrente è ONLINE. Spegni il server attivo prima di cambiare istanza."}
 
     instances.insert(pos, new_inst)
     save_instances_data(instances)
 
-    if set_active:
+    if new_inst["is_active"]:
+        # Anche per la cartella del server attivo aggiunta di nuovo: prima cambiava solo instances.json e il server
+        # continuava con porta e avvio di config.json fino al cambio di server successivo
         switch_instance(inst_id, manager=manager)
 
     return {"success": True, "instance": new_inst, "instances": instances}
@@ -292,6 +300,23 @@ def delete_instance(instance_id: str) -> Dict[str, Any]:
     instances = [i for i in instances if i.get("id") != instance_id]
     save_instances_data(instances)
     return {"success": True, "instances": instances}
+
+
+def _version_dirs(path: str) -> List[str]:
+    """Cartelle delle versioni in libraries/... (es. "1.20.1-47.2.21", "21.1.77"), senza altri file."""
+    return [d for d in os.listdir(path) if d[:1].isdigit() and os.path.isdir(os.path.join(path, d))]
+
+
+def _version_key(name: str):
+    import re
+    return tuple(int(n) for n in re.findall(r"\d+", name))
+
+
+def _pick_version(names: List[str], script_text: str = "") -> str:
+    """Tra più versioni dello stesso server quella nominata nello script di avvio (quella che parte davvero),
+    altrimenti la più recente. Prima si prendeva la prima dell'elenco della cartella, di solito la più vecchia."""
+    used = [n for n in names if n.lower() in script_text]
+    return max(used or names, key=_version_key)
 
 
 def neoforge_to_mc_version(neoforge_version: str) -> str:
@@ -361,6 +386,7 @@ def detect_server_details(folder_path: str) -> Dict[str, Any]:
 
     # 2. Check for startup scripts (run.bat, start.bat, launch.bat, etc.)
     found_bat = False
+    script_text = ""   # contenuto dello script (minuscolo): dice quale versione si avvia davvero
     for bat_candidate in LAUNCH_SCRIPT_SEARCH:
         p = os.path.join(norm_dir, bat_candidate)
         if os.path.isfile(p):
@@ -371,6 +397,7 @@ def detect_server_details(folder_path: str) -> Dict[str, Any]:
                 with open(p, "r", encoding="utf-8", errors="ignore") as bf:
                     content = bf.read()
                     content_lower = content.lower()
+                    script_text = content_lower
                     if "neoforged" in content_lower:
                         detected_type = "neoforge"
                     elif "minecraftforge" in content_lower:
@@ -397,10 +424,10 @@ def detect_server_details(folder_path: str) -> Dict[str, Any]:
         detected_type = "neoforge"
         key_findings.append("Librerie NeoForge")
         try:
-            sub = os.listdir(neoforge_lib)
+            sub = _version_dirs(neoforge_lib)
             if sub:
                 # Il numero di NeoForge non è quello di Minecraft: prima un server 1.21.1 risultava "21.1.77"
-                mc = neoforge_to_mc_version(sub[0])
+                mc = neoforge_to_mc_version(_pick_version(sub, script_text))
                 if mc:
                     detected_version = mc
                     confidence = "high"
@@ -413,10 +440,10 @@ def detect_server_details(folder_path: str) -> Dict[str, Any]:
         detected_type = "forge"
         key_findings.append("Librerie Minecraft Forge")
         try:
-            vers = os.listdir(forge_lib)
+            vers = _version_dirs(forge_lib)
             if vers:
                 # E.g. '1.20.1-47.2.21'
-                m = re.search(r"^(\d+\.\d+(?:\.\d+)?)", vers[0])
+                m = re.search(r"^(\d+\.\d+(?:\.\d+)?)", _pick_version(vers, script_text))
                 if m:
                     detected_version = m.group(1)
                     confidence = "high"
@@ -445,32 +472,21 @@ def detect_server_details(folder_path: str) -> Dict[str, Any]:
                 pass
 
     # Paper / Purpur / Spigot
-    for f in os.listdir(norm_dir):
-        fl = f.lower()
-        if fl.startswith("paper") and fl.endswith(".jar"):
-            detected_type = "paper"
-            key_findings.append(f"Jar Paper ({f})")
-            m = re.search(r"paper[-_](\d+\.\d+(?:\.\d+)?)", fl)
-            if m:
-                detected_version = m.group(1)
-                confidence = "high"
-            break
-        elif fl.startswith("purpur") and fl.endswith(".jar"):
-            detected_type = "purpur"
-            key_findings.append(f"Jar Purpur ({f})")
-            m = re.search(r"purpur[-_](\d+\.\d+(?:\.\d+)?)", fl)
-            if m:
-                detected_version = m.group(1)
-                confidence = "high"
-            break
-        elif fl.startswith("spigot") and fl.endswith(".jar"):
-            detected_type = "spigot"
-            key_findings.append(f"Jar Spigot ({f})")
-            m = re.search(r"spigot[-_](\d+\.\d+(?:\.\d+)?)", fl)
-            if m:
-                detected_version = m.group(1)
-                confidence = "high"
-            break
+    # Con più jar (quello vecchio resta dopo un aggiornamento) quello avviato dallo script o il più recente: prima
+    # il primo in ordine alfabetico, di solito il vecchio
+    root_jars = [f for f in os.listdir(norm_dir) if f.lower().endswith(".jar")]
+    for kind, label in (("paper", "Paper"), ("purpur", "Purpur"), ("spigot", "Spigot")):
+        jars = [f for f in root_jars if f.lower().startswith(kind)]
+        if not jars:
+            continue
+        f = _pick_version(jars, script_text)
+        detected_type = kind
+        key_findings.append(f"Jar {label} ({f})")
+        m = re.search(kind + r"[-_](\d+\.\d+(?:\.\d+)?)", f.lower())
+        if m:
+            detected_version = m.group(1)
+            confidence = "high"
+        break
 
     # CurseForge Manifest
     manifest_p = os.path.join(norm_dir, "manifest.json")

@@ -27,7 +27,7 @@ from eco_wake import BLOCKED_TEXT as ECO_BLOCKED_TEXT, STARTING_TEXT as ECO_STAR
 from platform_utils import (IS_WINDOWS, LAUNCH_SCRIPT, LAUNCH_SCRIPT_CANDIDATES, split_java_line, script_fallback_command,
                             is_java_line, java_token_end, refresh_path_from_system, script_variable,
                             expand_script_variables,
-                            read_json_with_backup, write_json_atomic, write_text_atomic)
+                            read_json_with_backup, read_script_text, write_json_atomic, write_text_atomic)
 
 # Processi figli (java, jcmd, run.bat) senza finestra: il pannello gira senza console, quindi ogni processo
 # avviato senza questo flag aprirebbe una propria finestra cmd
@@ -1042,18 +1042,19 @@ class ServerManager:
             try:
                 windows = not c_bat.lower().endswith(".sh")
                 variables: Dict[str, str] = {}
-                with open(c_bat, "r", encoding="utf-8", errors="ignore") as f:
-                    for line in f:
-                        s = line.strip()
-                        var = script_variable(s, windows)
-                        if var:
-                            variables[var[0]] = var[1]
-                        elif is_java_line(s):
-                            # "set RAM=6G" e poi "java -Xmx%RAM% ...": prima a Java arrivava "-Xmx%RAM%"
-                            expanded = expand_script_variables(s, variables, windows)
-                            if expanded is None:
-                                break   # variabile che si conosce solo eseguendo lo script: lo esegue cmd
-                            return split_java_line(expanded, server_dir)
+                # Nella codifica del file: prima si leggeva come UTF-8 scartando le lettere accentate di un run.bat
+                # salvato nella codifica di Windows (il percorso arrivava a Java sbagliato)
+                for line in read_script_text(c_bat)[0].splitlines():
+                    s = line.strip()
+                    var = script_variable(s, windows)
+                    if var:
+                        variables[var[0]] = var[1]
+                    elif is_java_line(s):
+                        # "set RAM=6G" e poi "java -Xmx%RAM% ...": prima a Java arrivava "-Xmx%RAM%"
+                        expanded = expand_script_variables(s, variables, windows)
+                        if expanded is None:
+                            break   # variabile che si conosce solo eseguendo lo script: lo esegue cmd
+                        return split_java_line(expanded, server_dir)
             except Exception:
                 pass
             return script_fallback_command(c_bat)
@@ -1689,10 +1690,11 @@ class ServerManager:
     # =========================================================
     def scan_crash_reports(self) -> List[Dict[str, Any]]:
         """Scans crash-reports/ folder in the server directory and parses details."""
-        server_dir = self.config.get("server_dir", "")
+        server_dir = (self.config.get("server_dir") or "").strip()
         crash_dir = os.path.join(server_dir, "crash-reports")
         reports = []
-        if os.path.isdir(crash_dir):
+        # Senza server collegato nessun rapporto: prima si leggeva crash-reports nella cartella del programma
+        if server_dir and os.path.isdir(crash_dir):
             try:
                 txt_files = [f for f in os.listdir(crash_dir) if f.endswith(".txt")]
                 txt_files.sort(key=lambda f: os.path.getmtime(os.path.join(crash_dir, f)), reverse=True)
@@ -1770,7 +1772,9 @@ class ServerManager:
 
         if self._RE_MC_STOPPING.search(line):
             self._mc_stop_seen = True
-        if any(mark in line for mark in self._MC_CRASH_MARKS):
+        # Non dalle righe della chat: prima un giocatore che scriveva "Crash report saved to" faceva prendere il /stop
+        # successivo per un crash (avviso e riavvio automatico)
+        if any(mark in line for mark in self._MC_CRASH_MARKS) and not self._RE_CHAT_MSG.search(line):
             self._mc_crash_seen = True
 
         # 1. Server Ready Detection
@@ -2762,7 +2766,9 @@ class ServerManager:
                     if f.endswith(".txt"):
                         categories["logs_cleanable"] += sz
                         cleanable_count += 1
-                elif f.endswith(".hprof") or f.startswith("hs_err_pid"):
+                elif (f.endswith(".hprof") or f.startswith("hs_err_pid")) and os.path.dirname(rel) == "":
+                    # Solo nella cartella principale, come la pulizia: prima si contavano anche quelli nelle
+                    # sottocartelle e il pannello prometteva più spazio di quello che la pulizia liberava
                     categories["logs_cleanable"] += sz
                     categories["other"] += sz
                     cleanable_count += 1
@@ -3083,8 +3089,8 @@ class ServerManager:
                 # Vanilla, Paper, Fabric...: la RAM è nella riga java di run.bat (o nel comando salvato)
                 bat = self._find_run_bat()
                 if bat:
-                    with open(bat, "r", encoding="utf-8", errors="ignore") as f:
-                        bat_lines = f.read().splitlines()
+                    bat_text, bat_enc = read_script_text(bat)
+                    bat_lines = bat_text.splitlines()
                     changed = False
                     for i, l in enumerate(bat_lines):
                         if is_java_line(l):
@@ -3092,7 +3098,8 @@ class ServerManager:
                             changed = True
                             break
                     if changed:
-                        write_text_atomic(bat, "\n".join(bat_lines) + "\n")
+                        # Stessa codifica di prima: le lettere accentate del file restano com'erano
+                        write_text_atomic(bat, "\n".join(bat_lines) + "\n", encoding=bat_enc)
                         written = os.path.basename(bat)
                 cmd = (self.config.get("server_command") or "").strip()
                 if is_java_line(cmd):

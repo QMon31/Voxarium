@@ -20,12 +20,44 @@ IS_WINDOWS = os.name == "nt"
 _write_lock = threading.Lock()
 
 
-def write_text_atomic(path: str, text: str, newline: Optional[str] = None) -> None:
+def script_encoding(data: bytes) -> str:
+    """Codifica di uno script di avvio: UTF-8 (anche con BOM) se il file lo è, altrimenti quella con cui lo legge il
+    prompt dei comandi di Windows (OEM, es. cp850). Su Linux latin-1. Con errors="surrogateescape" la lettura e la
+    riscrittura lasciano gli stessi byte."""
+    if data.startswith(b"\xef\xbb\xbf"):
+        return "utf-8-sig"
+    try:
+        data.decode("utf-8")
+        return "utf-8"
+    except UnicodeDecodeError:
+        pass
+    if IS_WINDOWS:
+        try:
+            import codecs
+            import ctypes
+            enc = f"cp{ctypes.windll.kernel32.GetOEMCP()}"
+            codecs.lookup(enc)
+            return enc
+        except Exception:
+            return "cp850"
+    return "latin-1"
+
+
+def read_script_text(path: str):
+    """(testo, codifica) di run.bat / run.sh. Prima si leggeva come UTF-8 scartando i caratteri non validi: un
+    run.bat salvato nella codifica di Windows perdeva le lettere accentate (es. un percorso C:\\Users\\Niccolò)."""
+    with open(path, "rb") as f:
+        data = f.read()
+    enc = script_encoding(data)
+    return data.decode(enc, errors="surrogateescape"), enc
+
+
+def write_text_atomic(path: str, text: str, newline: Optional[str] = None, encoding: str = "utf-8") -> None:
     """Scrive il file in modo che non resti mai a metà: prima un .tmp accanto, poi lo scambio (os.replace).
     Se il PC si spegne durante il salvataggio resta il file vecchio intero."""
     tmp = path + ".tmp"
     with _write_lock:
-        with open(tmp, "w", encoding="utf-8", newline=newline) as f:
+        with open(tmp, "w", encoding=encoding, errors="surrogateescape", newline=newline) as f:
             f.write(text)
             f.flush()
             os.fsync(f.fileno())

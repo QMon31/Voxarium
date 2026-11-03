@@ -501,7 +501,7 @@ class InternetAccessTest(unittest.TestCase):
         self.assertEqual(self._status(self._req(8443, "81.0.0.9", {"X-Admin-Token": "tok"})), 200)
 
     def test_public_status_hides_pc_paths(self):
-        # /api/status, /api/backup/status, /api/storage/breakdown si leggono senza PIN (anche da internet):
+        # /api/status e /api/backup/status si leggono senza PIN (anche da internet; /api/storage/breakdown dal 03/11/2026 no):
         # i percorsi del PC, con il nome utente di Windows, solo a chi ha accesso
         st = {"state": "ONLINE", "server_dir": "C:/Users/x/srv", "cloud_sync_dir": "G:/Drive"}
         hide = self.ns["hide_private_paths"]

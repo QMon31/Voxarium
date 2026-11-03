@@ -1667,6 +1667,12 @@ def update_config(req: ConfigUpdateRequest, request: Request):
         if pin_changed:
             valid_auth_tokens.revoke_all_except(request.headers.get("X-Admin-Token"))
             _close_revoked_websockets()
+        if not (new_dir and new_dir != old_dir):
+            # Stesso server: file e comando di avvio anche nel server attivo dell'elenco. Prima cambiava solo
+            # config.json e, passando a un altro server e tornando, tornava quello vecchio
+            for key in ("server_run_bat", "server_command"):
+                if key in update_data:
+                    manager._remember_active_instance(key, update_data[key])
         port_res = None
         if new_port is not None and current.get("server_dir") and int(new_port) != manager.get_server_port():
             port_res = manager.set_server_port(int(new_port))
@@ -1835,7 +1841,9 @@ def download_backup_item(request: Request, id: str = "desktop"):
                     filename=os.path.basename(p),
                     headers={"Content-Disposition": f'attachment; filename="{os.path.basename(p)}"'}
                 )
-    if os.path.exists(backup_mgr.target_path):
+    # Solo il backup principale ("desktop" o il suo nome): prima un backup che non c'era più faceva scaricare quello
+    # del server attivo, con un altro nome
+    if id in ("desktop", backup_mgr.target_filename) and os.path.exists(backup_mgr.target_path):
         return FileResponse(
             backup_mgr.target_path,
             media_type="application/zip",
@@ -1880,7 +1888,10 @@ def api_delete_backup(req: DeleteBackupRequest, request: Request):
 
 @app.get("/api/storage/breakdown")
 def api_get_storage(request: Request):
-    return hide_private_paths(manager.get_storage_breakdown(), request)
+    # Con il PIN, come le altre pagine con i dati del server: senza, chiunque (anche da internet) poteva chiederla di
+    # continuo e a ogni richiesta il programma scorreva tutti i file della cartella del server
+    verify_admin_access(request)
+    return manager.get_storage_breakdown()
 
 @app.post("/api/storage/clean-logs")
 def api_clean_logs(request: Request):

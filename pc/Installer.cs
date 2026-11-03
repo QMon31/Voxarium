@@ -1379,6 +1379,9 @@ namespace MinecraftControlCenterInstaller
 
             BackgroundWorker bw = new BackgroundWorker();
             bw.WorkerReportsProgress = true;
+            // File che non si sono potuti sostituire nemmeno rinominando quello vecchio: prima l'errore si ignorava e
+            // l'installazione risultava riuscita con un file vecchio in mezzo a quelli nuovi
+            List<string> notUpdated = new List<string>();
 
             bw.DoWork += (s, e) => {
                 bw.ReportProgress(10, "Creazione cartella di destinazione...");
@@ -1453,7 +1456,7 @@ namespace MinecraftControlCenterInstaller
                                             File.Move(fullPath, oldTemp);
                                             entry.ExtractToFile(fullPath, true);
                                         }
-                                        catch { }
+                                        catch { lock (notUpdated) notUpdated.Add(entry.FullName); }
                                     }
                                 }
 
@@ -1686,6 +1689,13 @@ namespace MinecraftControlCenterInstaller
                 if (e.Error != null)
                 {
                     I18n.ShowMessage("Nota durante l'installazione: " + e.Error.Message, "Installazione", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                if (notUpdated.Count > 0)
+                {
+                    string files = string.Join(", ", notUpdated.ToArray());
+                    if (files.Length > 300) files = files.Substring(0, 300) + "...";
+                    I18n.ShowMessage("File del programma non aggiornati perché in uso: " + files + ". Riavvia il PC e ripeti l'aggiornamento.",
+                                     "Installazione", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
                 ShowStep(5);
             };

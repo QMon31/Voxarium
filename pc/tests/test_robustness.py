@@ -1505,5 +1505,322 @@ class WrongJavaLogTest(unittest.TestCase):
         self.assertIn("Java 25", list(m.errors_list)[-1]["message"])
 
 
+class ModUpdateKeepsOldOnFailureTest(unittest.TestCase):
+    """Aggiornamento di una mod dallo Store: se la nuova versione non si mette al suo posto, la vecchia resta."""
+
+    def setUp(self):
+        import modrinth_store
+        self.ms = modrinth_store
+        self.dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.dir, True)
+        os.makedirs(os.path.join(self.dir, "mods"))
+        self.old = os.path.join(self.dir, "mods", "sodium-1.0.jar")
+        with open(self.old, "wb") as f:
+            f.write(b"vecchia")
+
+        def fake_download(url, dest, ua, **kw):
+            with open(dest, "wb") as f:
+                f.write(b"nuova")
+            return 5
+        p = mock.patch.object(modrinth_store, "download_file", fake_download)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def _update(self):
+        return self.ms.update_mod_file(self.dir, "sodium-1.0.jar", "mods",
+                                       download_url="https://cdn.modrinth.com/data/x/sodium-2.0.jar",
+                                       new_filename="sodium-2.0.jar", project_id="AANobbMI", version_number="2.0")
+
+    def test_replace_failure_keeps_old_version(self):
+        with mock.patch.object(self.ms.os, "replace", side_effect=PermissionError("[WinError 32] in uso")):
+            res = self._update()
+        self.assertFalse(res["success"])
+        self.assertEqual(_read(self.old), "vecchia")
+        self.assertEqual([f for f in os.listdir(os.path.join(self.dir, "mods"))], ["sodium-1.0.jar"])
+
+    def test_success_replaces_old_version(self):
+        res = self._update()
+        self.assertTrue(res["success"], res)
+        self.assertEqual(os.listdir(os.path.join(self.dir, "mods")), ["sodium-2.0.jar"])
+
+
+class ReAddActiveServerTest(unittest.TestCase):
+    """La cartella del server attivo aggiunta di nuovo aggiorna anche config.json (prima solo instances.json)."""
+
+    def test_readd_active_folder_syncs_config(self):
+        import instance_manager
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        inst_file, cfg_file, a = os.path.join(d, "instances.json"), os.path.join(d, "config.json"), os.path.join(d, "A")
+        os.makedirs(a)
+        with open(inst_file, "w", encoding="utf-8") as f:
+            json.dump([{"id": "a", "name": "A", "server_dir": a, "server_port": 25565,
+                        "server_run_bat": "run.bat", "server_command": "java -jar server.jar nogui",
+                        "is_active": True}], f)
+
+        class FakeManager:
+            state = "STOPPED"
+            config = {"server_dir": a, "server_port": 25565}
+
+            def save_config(self):
+                pass
+        m = FakeManager()
+        with mock.patch.object(instance_manager, "INSTANCES_FILE", inst_file), \
+                mock.patch.object(instance_manager, "CONFIG_FILE", cfg_file):
+            m.state = "ONLINE"
+            res = instance_manager.add_instance("A", a, "run.bat", "java -jar server.jar nogui", 25570, manager=m)
+            self.assertFalse(res["success"])   # a server acceso la porta non cambia
+            m.state = "STOPPED"
+            res = instance_manager.add_instance("A", a, "run.bat", "java -jar server.jar nogui", 25570, manager=m)
+        self.assertTrue(res["success"], res)
+        self.assertEqual(m.config["server_port"], 25570)
+
+
+class ChatDoesNotFakeCrashTest(unittest.TestCase):
+    """Una frase scritta in chat non fa prendere lo stop di un server riagganciato per un crash."""
+
+    def test_crash_marks_only_from_server_lines(self):
+        import server_manager as sm
+        with tempfile.TemporaryDirectory() as td:
+            m = sm.ServerManager(config_path=os.path.join(td, "config.json"))
+            m.running = False
+            m._parse_log_line("[12:00:00] [Server thread/INFO]: <Bob> Crash report saved to ciao")
+            m._parse_log_line("[12:00:01] [Async Chat Thread - #0/INFO]: <Bob> Considering it to be crashed")
+            self.assertFalse(m._mc_crash_seen)
+            m._parse_log_line("[12:01:00] [Server thread/INFO]: Stopping the server")
+            self.assertTrue(m._mc_stop_seen)
+            m._parse_log_line("[12:02:00] [Server thread/ERROR]: This crash report has been saved to: C:\\x.txt")
+            self.assertTrue(m._mc_crash_seen)
+
+
+class FileManagerServerPropertiesTest(unittest.TestCase):
+    """server.properties salvato dal file manager: porta controllata come nelle altre schede."""
+
+    def test_reserved_port_refused_and_valid_port_remembered(self):
+        from fastapi import HTTPException
+        import app as app_mod
+        from routes import files as files_routes
+        with tempfile.TemporaryDirectory() as td:
+            props = os.path.join(td, "server.properties")
+            with open(props, "w", encoding="utf-8") as f:
+                f.write("server-port=25565\n")
+            with mock.patch("routes.files.verify_admin_access"), \
+                    mock.patch("routes.files.get_server_dir_path", return_value=td), \
+                    mock.patch("routes.files.request_minecraft_port_sync") as sync, \
+                    mock.patch.object(app_mod.manager, "remember_server_port") as remember, \
+                    mock.patch.object(app_mod.manager, "get_server_port", return_value=25570), \
+                    mock.patch.object(app_mod.backup_mgr, "is_running", False):
+                with self.assertRaises(HTTPException) as ctx:
+                    files_routes.api_files_save(app_mod.SaveFileRequest(path="server.properties",
+                                                                        content="server-port=80\n"), None)
+                self.assertEqual(ctx.exception.status_code, 400)
+                self.assertEqual(_read(props), "server-port=25565\n")
+                files_routes.api_files_save(app_mod.SaveFileRequest(path="/server.properties",
+                                                                    content="server-port=25570\n"), None)
+                remember.assert_called_once_with(25570)
+                sync.assert_called_once()
+                # Un altro file con lo stesso nome in una sottocartella non è il server.properties del server
+                os.makedirs(os.path.join(td, "config"))
+                files_routes.api_files_save(app_mod.SaveFileRequest(path="config/server.properties",
+                                                                    content="server-port=80\n"), None)
+            self.assertEqual(_read(props), "server-port=25570\n")
+
+
+class BackupOldTimestampTest(unittest.TestCase):
+    """Un file con la data prima del 1980 non fa più fallire tutto il backup (lo ZIP non accetta quelle date)."""
+
+    def test_backup_with_1970_file_completes(self):
+        import zipfile
+        import backup_manager
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        srv, desk = os.path.join(d, "Server"), os.path.join(d, "desk")
+        os.makedirs(os.path.join(srv, "world"))
+        os.makedirs(desk)
+        old = os.path.join(srv, "libreria_vecchia.txt")
+        with open(old, "w", encoding="utf-8") as f:
+            f.write("data zero")
+        os.utime(old, (86400, 86400))   # 2 gennaio 1970
+        with open(os.path.join(srv, "world", "level.dat"), "wb") as f:
+            f.write(b"mondo")
+        mgr = backup_manager.BackupManager(srv, desktop_dir=desk)
+        self.assertEqual(mgr.start_backup(is_server_stopped=True)["status"], "success")
+        for _ in range(400):
+            if not mgr.is_running:
+                break
+            time.sleep(0.05)
+        self.assertFalse(mgr.is_running)
+        self.assertEqual(mgr.progress["percent"], 100, mgr.progress.get("status"))
+        with zipfile.ZipFile(mgr.target_path) as zf:
+            info = zf.getinfo("libreria_vecchia.txt")
+            self.assertEqual(info.date_time[0], 1980)
+            self.assertEqual(zf.read("libreria_vecchia.txt"), b"data zero")
+
+
+class SettingsRunBatSyncTest(unittest.TestCase):
+    """File di avvio cambiato nelle Impostazioni: salvato anche nel server attivo dell'elenco."""
+
+    def test_run_bat_from_settings_reaches_active_instance(self):
+        import app as app_mod
+        with tempfile.TemporaryDirectory() as td:
+            cur_dir = app_mod.manager.config.get("server_dir") or ""
+            new_bat = os.path.join(cur_dir or td, "avvio_nuovo.bat")
+            with mock.patch.object(app_mod, "verify_admin_access"), \
+                    mock.patch.object(app_mod.manager, "save_config"), \
+                    mock.patch.object(app_mod.manager, "_remember_active_instance") as remember, \
+                    mock.patch.dict(app_mod.manager.config, {}, clear=False):
+                app_mod.update_config(app_mod.ConfigUpdateRequest(server_dir=cur_dir, server_run_bat=new_bat),
+                                      mock.MagicMock(headers={}))
+            remember.assert_any_call("server_run_bat", new_bat)
+
+
+class RunBatEncodingTest(unittest.TestCase):
+    """run.bat salvato nella codifica di Windows: la RAM cambiata dal pannello non toglie le lettere accentate e il
+    percorso arriva a Java giusto."""
+
+    def test_accented_run_bat_kept_on_ram_change(self):
+        import server_manager as sm
+        from platform_utils import script_encoding
+        with tempfile.TemporaryDirectory() as td:
+            srv = os.path.join(td, "srv")
+            os.makedirs(srv)
+            original = '@echo off\r\necho Avvio però\r\njava -Xmx2G -jar "C:\\Niccolò\\server.jar" nogui\r\npause\r\n'
+            raw = original.encode("cp850")
+            self.assertRaises(UnicodeDecodeError, raw.decode, "utf-8")
+            bat = os.path.join(srv, "run.bat")
+            with open(bat, "wb") as f:
+                f.write(raw)
+            enc = script_encoding(raw)
+            expected_jar = original.encode("cp850").decode(enc).split('"')[1]
+            m = sm.ServerManager(config_path=os.path.join(td, "config.json"))
+            m.running = False
+            m.config.update({"server_dir": srv, "server_run_bat": bat, "server_command": ""})
+            self.assertIn(expected_jar, m.get_launch_command())
+            with mock.patch.object(m, "_host_ram_gb", return_value=16), mock.patch.object(m, "save_config"):
+                res = m.save_jvm_tuning(4, False)
+            self.assertEqual(res["status"], "success", res)
+            with open(bat, "rb") as f:
+                after = f.read()
+            self.assertIn("Avvio però".encode("cp850"), after)
+            self.assertIn('"C:\\Niccolò\\server.jar"'.encode("cp850"), after)
+            self.assertIn(b"-Xmx4G", after)
+            self.assertNotIn(b"-Xmx2G", after)
+
+
+class DetectVersionAfterUpgradeTest(unittest.TestCase):
+    """Server aggiornato con la versione vecchia ancora nella cartella: si riconosce quella che parte davvero."""
+
+    def _mkdir(self, *parts):
+        os.makedirs(os.path.join(*parts), exist_ok=True)
+
+    def test_forge_uses_version_in_run_bat(self):
+        import instance_manager
+        with tempfile.TemporaryDirectory() as td:
+            lib = os.path.join(td, "libraries", "net", "minecraftforge", "forge")
+            for v in ("1.20.1-47.2.0", "1.20.4-49.0.30", "1.21.1-52.0.1"):
+                self._mkdir(lib, v)
+            with open(os.path.join(td, "run.bat"), "w", encoding="utf-8") as f:
+                f.write("java @user_jvm_args.txt @libraries/net/minecraftforge/forge/1.20.4-49.0.30/win_args.txt %*\n")
+            det = instance_manager.detect_server_details(td)
+        self.assertEqual((det["server_type"], det["mc_version"]), ("forge", "1.20.4"))
+
+    def test_neoforge_without_script_uses_newest(self):
+        import instance_manager
+        with tempfile.TemporaryDirectory() as td:
+            lib = os.path.join(td, "libraries", "net", "neoforged", "neoforge")
+            for v in ("20.4.237", "21.1.77", "21.10.3"):
+                self._mkdir(lib, v)
+            det = instance_manager.detect_server_details(td)
+        self.assertEqual((det["server_type"], det["mc_version"]), ("neoforge", "1.21.10"))
+
+    def test_paper_two_jars(self):
+        import instance_manager
+        with tempfile.TemporaryDirectory() as td:
+            for name in ("paper-1.20.4-499.jar", "paper-1.21.1-100.jar"):
+                with open(os.path.join(td, name), "wb") as f:
+                    f.write(b"x")
+            det = instance_manager.detect_server_details(td)
+        self.assertEqual((det["server_type"], det["mc_version"]), ("paper", "1.21.1"))
+
+
+class StorageAndCrashListTest(unittest.TestCase):
+    """Spazio su disco solo con il PIN; file eliminabili contati come la pulizia; nessun crash senza server."""
+
+    def test_storage_needs_pin(self):
+        from fastapi import HTTPException
+        import app as app_mod
+        with mock.patch.object(app_mod, "verify_admin_access",
+                               side_effect=HTTPException(status_code=401, detail="PIN")), \
+                mock.patch.object(app_mod.manager, "get_storage_breakdown") as walk:
+            with self.assertRaises(HTTPException) as ctx:
+                app_mod.api_get_storage(None)
+        self.assertEqual(ctx.exception.status_code, 401)
+        walk.assert_not_called()   # senza PIN non si scorre nemmeno la cartella
+
+    def test_cleanable_matches_clean_and_no_crashes_without_server(self):
+        import server_manager as sm
+        with tempfile.TemporaryDirectory() as td:
+            srv = os.path.join(td, "srv")
+            os.makedirs(os.path.join(srv, "config"))
+            for rel in ("java_pid1.hprof", os.path.join("config", "java_pid2.hprof")):
+                with open(os.path.join(srv, rel), "wb") as f:
+                    f.write(b"x" * (1024 * 1024))
+            m = sm.ServerManager(config_path=os.path.join(td, "config.json"))
+            m.running = False
+            m.config["server_dir"] = srv
+            promised = m.get_storage_breakdown()["cleanable_mb"]
+            with mock.patch.object(m, "add_log"):
+                freed = m.clean_old_logs()["freed_mb"]
+            self.assertEqual(promised, freed)
+            self.assertEqual(promised, 1.0)
+            # Nessun server collegato: niente rapporti presi dalla cartella del programma
+            os.makedirs(os.path.join(td, "crash-reports"))
+            with open(os.path.join(td, "crash-reports", "crash-1.txt"), "w", encoding="utf-8") as f:
+                f.write("Description: prova\n")
+            m.config["server_dir"] = ""
+            cwd = os.getcwd()
+            os.chdir(td)
+            try:
+                self.assertEqual(m.scan_crash_reports(), [])
+            finally:
+                os.chdir(cwd)
+
+
+class InstallerReportsLockedFilesTest(unittest.TestCase):
+    """Installer: un file non sostituito nemmeno rinominando quello vecchio viene segnalato, non ignorato."""
+
+    def test_second_extract_failure_is_recorded_and_shown(self):
+        with open(os.path.join(ROOT, "Installer.cs"), encoding="utf-8") as f:
+            src = f.read()
+        fallback = src[src.index("string oldTemp = fullPath"):src.index("count++;", src.index("string oldTemp = fullPath"))]
+        self.assertIn("notUpdated.Add(entry.FullName)", fallback)
+        self.assertNotRegex(fallback, r"catch\s*\{\s*\}")
+        done = src[src.index("bw.RunWorkerCompleted"):]
+        self.assertIn("if (notUpdated.Count > 0)", done[:done.index("ShowStep(5)")])
+
+
+class BackupDownloadUnknownIdTest(unittest.TestCase):
+    """Un backup che non c'è più dà "non trovato", non il backup del server attivo con un altro nome."""
+
+    def test_unknown_id_is_404_and_desktop_still_works(self):
+        from fastapi import HTTPException
+        import app as app_mod
+        with tempfile.TemporaryDirectory() as td:
+            main_zip = os.path.join(td, "Backup_Server.zip")
+            with open(main_zip, "wb") as f:
+                f.write(b"PK")
+            cls = type(app_mod.backup_mgr)
+            with mock.patch.object(app_mod, "verify_admin_access"), \
+                    mock.patch.object(app_mod.backup_mgr, "list_available_backups", return_value=[]), \
+                    mock.patch.object(cls, "target_path", new_callable=mock.PropertyMock, return_value=main_zip), \
+                    mock.patch.object(cls, "target_filename", new_callable=mock.PropertyMock,
+                                      return_value="Backup_Server.zip"):
+                with self.assertRaises(HTTPException) as ctx:
+                    app_mod.download_backup_item(None, id="cloud_vecchio_backup.zip")
+                self.assertEqual(ctx.exception.status_code, 404)
+                res = app_mod.download_backup_item(None, id="desktop")
+                self.assertEqual(res.path, main_zip)
+
+
 if __name__ == "__main__":
     unittest.main()

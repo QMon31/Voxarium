@@ -7,9 +7,10 @@ import os
 from fastapi import APIRouter
 
 from app import (
-    CreateItemRequest, DeleteItemRequest, RenameItemRequest, SaveFileRequest, UnzipItemRequest, backup_mgr, get_server_dir_path, save_upload,
-    verify_admin_access,
+    CreateItemRequest, DeleteItemRequest, RenameItemRequest, SaveFileRequest, UnzipItemRequest, backup_mgr, get_server_dir_path, manager,
+    request_minecraft_port_sync, save_upload, verify_admin_access,
 )
+from routes.properties_metrics import _validate_raw_server_port
 
 router = APIRouter()
 
@@ -44,9 +45,19 @@ def api_files_save(req: SaveFileRequest, request: Request):
         raise HTTPException(status_code=409, detail="Attendi la fine del backup o del ripristino in corso.")
     server_dir = get_server_dir_path()
     target_rel = req.path or req.subpath or ""
+    # server.properties principale del server: stessi controlli della porta delle schede Proprietà e File di
+    # configurazione (prima dal file manager passava anche una porta riservata, es. quella del pannello)
+    props_path = os.path.join(server_dir, "server.properties") if server_dir else ""
+    target_abs = file_manager.resolve_safe_path(server_dir, target_rel) if server_dir else None
+    is_props = bool(target_abs) and os.path.normcase(target_abs) == os.path.normcase(os.path.abspath(props_path))
+    if is_props:
+        _validate_raw_server_port(req.content)
     res = file_manager.save_text_file(server_dir, target_rel, req.content)
     if not res.get("success"):
         raise HTTPException(status_code=400, detail=res.get("error"))
+    if is_props:
+        manager.remember_server_port(manager.get_server_port())
+        request_minecraft_port_sync()
     return res
 
 @router.post("/api/files/create")
