@@ -2495,32 +2495,35 @@ body.modal-open {
   background: linear-gradient(180deg, rgba(217, 164, 65, 0.06) 0%, var(--bg-card) 100%);
   box-shadow: 0 4px 14px rgba(217, 164, 65, 0.1);
 }
+/* "Fissa" è una parola, non un'icona: piccolo pulsante con contorno, centrato sulla riga del nome. Prima era una scritta
+   grande e sbiadita senza contorno, attaccata all'angolo della scheda (e ingrandita al passaggio del mouse) */
 .cmd-pin-btn {
   background: none;
-  border: none;
+  border: 1px solid var(--border-color);
   cursor: pointer;
-  font-size: 1.15rem;
-  padding: 2px 6px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 3px 9px;
   border-radius: 6px;
-  transition: transform 0.15s, opacity 0.15s;
-  opacity: 0.35;
+  transition: color 0.15s, border-color 0.15s;
   color: #9a9ca2;
-  line-height: 1;
+  line-height: 1.3;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 .cmd-pin-btn:hover {
-  transform: scale(1.2);
-  opacity: 0.85;
   color: #e3b35a;
+  border-color: rgba(217, 164, 65, 0.5);
 }
 .cmd-pin-btn.pinned {
-  opacity: 1;
   color: #e3b35a;
-  text-shadow: 0 0 8px rgba(217, 164, 65, 0.6);
+  border-color: rgba(217, 164, 65, 0.6);
 }
 .cmd-card-top {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   margin-bottom: 10px;
 }
@@ -2533,7 +2536,8 @@ body.modal-open {
   padding: 4px 8px;
   border-radius: 6px;
   border: 1px solid rgba(111, 159, 216, 0.2);
-  word-break: break-all;
+  /* a capo tra le parole del nome (app.js mette <wbr> prima delle maiuscole), a metà parola solo se non basta */
+  overflow-wrap: anywhere;
 }
 .cmd-badge {
   font-size: 0.72rem;
@@ -2566,19 +2570,32 @@ body.modal-open {
   margin-bottom: 12px;
   display: flex;
   flex-direction: column;
+  /* Righe larghe quanto il riquadro: la prima regola .cmd-form (barra della console) le centrava, e ogni riga si
+     stringeva sul suo contenuto con etichette e caselle sfalsate */
+  align-items: stretch;
   gap: 8px;
 }
-.cmd-form-row {
-  display: flex;
+/* Etichette e caselle su una griglia a due colonne: la colonna delle etichette è larga quanto l'etichetta più lunga
+   della scheda (al massimo il 45%), così "Stato:" non ruba spazio alla tendina e le caselle iniziano tutte allo stesso
+   punto. Prima era fissa al 38% e tagliava il testo delle tendine */
+.command-card .cmd-form {
+  display: grid;
+  grid-template-columns: fit-content(45%) minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: 8px 10px;
+}
+.cmd-form-row {
+  display: contents;
+}
+/* il nome personalizzato del giocatore va sotto la tendina */
+.cmd-form-row > :nth-child(n+3) {
+  grid-column: 2;
 }
 .cmd-form-label {
   font-size: 0.76rem;
   color: var(--text-muted);
-  min-width: 75px;
+  line-height: 1.3;
   font-weight: 600;
-  flex-shrink: 0;
 }
 .cmd-form-input, .cmd-form-select {
   flex: 1;
@@ -3263,6 +3280,7 @@ body.modal-open {
   }
 
   .cmd-form-row {
+    display: flex !important;
     flex-direction: column !important;
     align-items: stretch !important;
     gap: 4px !important;
@@ -3273,6 +3291,7 @@ body.modal-open {
   .cmd-form-label {
     min-width: unset !important;
     width: 100% !important;
+    flex: none !important;
     font-size: 0.72rem !important;
   }
 

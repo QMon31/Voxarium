@@ -120,6 +120,13 @@ small, .subtitle, .form-help, [class*="-sub"], [class*="-desc"], [class*="-label
   border-radius: var(--radius-card) !important;
 }
 [class*="-card"]:hover { background-color: inherit; }
+/* L'intestazione delle schede comandi ("cmd-card-top") non è un riquadro: la regola qui sopra la prendeva per uno
+   (bordo, sfondo, angoli) e "Fissa" finiva attaccato al bordo */
+.command-card .cmd-card-top {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+}
 
 /* le icone dentro quadratini colorati diventano semplici e grigie */
 [class*="-icon"]:not(svg):not(img):not(.ui-icon) {
@@ -186,6 +193,10 @@ small, .subtitle, .form-help, [class*="-sub"], [class*="-desc"], [class*="-label
   border-color: var(--control) !important;
   border-bottom-color: var(--accent) !important;  /* la linea d'accento sul bordo che c'è già, nessuna ombra */
 }
+/* Filtri dei comandi: quelli non scelti in grigio, così quello scelto (bianco con la linea d'accento) si riconosce.
+   Prima erano tutti bianchi e la sola linea di 1px non bastava */
+.cmd-cat-btn:not(.active) { color: var(--muted) !important; }
+.cmd-cat-btn:not(.active):hover { color: var(--text) !important; }
 
 /* focus visibile per chi usa la tastiera */
 :focus-visible {

@@ -5552,7 +5552,7 @@ function renderCommands() {
         <div>
           <div class="cmd-card-top">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-              <span class="cmd-code">/${escapeHtml(c.name)}</span>
+              <span class="cmd-code">/${escapeHtml(c.name).replace(/([a-z])([A-Z])/g, '$1<wbr>$2')}</span>
               <span class="cmd-badge ${badgeClass}">${escapeHtml(c.catName)}</span>
             </div>
             <button class="${pinClass}" onclick="togglePinCommand('${c.id}', event)" title="${pinTitle}">${pinIcon}</button>
