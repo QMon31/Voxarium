@@ -1,8 +1,8 @@
 {
-  "version_code": 113,
-  "version_name": "4.13.7",
+  "version_code": 114,
+  "version_name": "4.13.8",
   "download_url": "/static/Controllo_Server_Minecraft.apk",
-  "release_notes": "Correzioni: in chat un messaggio non riuscito non viene piu' rimandato due volte e le risposte del PC sono tradotte; la notifica di aggiornamento non riapre l'app da capo; il timer dice il tempo vero; la console non cancella il testo che stai scrivendo; il widget avvisa quando il PIN viene rifiutato.",
+  "release_notes": "v4.13.8: le notifiche che arrivano dal PC (Modalità Eco, giocatori, lag, memoria, disco, crash, backup, accessi da internet) sono tradotte nella lingua dell'app.",
   "min_sdk": 26,
   "target_sdk": 35
 }

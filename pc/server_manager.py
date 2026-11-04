@@ -208,6 +208,11 @@ class ServerManager:
     # Comando stop non inviato (es. server riagganciato con RCON spento): secondi in cui si guarda se Minecraft si
     # chiude lo stesso (la risposta RCON a "stop" può perdersi anche se il comando è arrivato)
     STOP_CONFIRM_SECONDS = 20
+    # Motivo dell'arresto della Modalità Eco: l'avviso al telefono parte solo a server chiuso davvero
+    ECO_STOP_REASON = "Spegnimento automatico Modalità Eco"
+    # Avvisi della Modalità Eco che si possono ripetere (risveglio bloccato o non riuscito): al massimo uno ogni 5 minuti,
+    # per non riempire il telefono e non superare i limiti di ntfy.sh
+    ECO_ALERT_COOLDOWN = 300
 
     def __init__(self, config_path: str = DEFAULT_CONFIG_PATH):
         self.config_path = config_path
@@ -314,6 +319,8 @@ class ServerManager:
         self.eco_wake: Optional[EcoWakeListener] = None
         self.eco_sleeping: str = str(self.config.get("eco_sleeping") or "") if self.eco_mode_enabled else ""
         self._eco_wake_retry_at = 0.0
+        # Ultimo invio al telefono di ogni avviso della Modalità Eco che si può ripetere (risveglio bloccato o fallito)
+        self._eco_alert_at: Dict[str, float] = {}
 
         # Anti-Lag Watchdog (Detect low TPS and auto clean ground items)
         self.anti_lag_enabled = self.config.get("anti_lag_enabled", True)
@@ -1433,6 +1440,8 @@ class ServerManager:
                 self.players.clear()
                 if not restarting:
                     self.add_log("[Pannello] Server arrestato con successo.")
+                    if reason == self.ECO_STOP_REASON:
+                        self._eco_stopped_alert()
 
                 restart_pending = self.scheduled_restart_in_progress
                 self.scheduled_restart_in_progress = False  # evita che _monitor_exit lanci un secondo riavvio
@@ -2135,12 +2144,9 @@ class ServerManager:
                         self.server_empty_since = time.time()
                     elif (time.time() - self.server_empty_since) >= (self.eco_mode_minutes * 60):
                         self.add_log(f"[Pannello] Modalità Eco: server vuoto da oltre {self.eco_mode_minutes} minuti. Spegnimento automatico per risparmiare RAM ed energia...")
-                        self.send_push_notification(
-                            title="Modalità Eco Attivata",
-                            message=f"Server vuoto da {self.eco_mode_minutes} min: arrestato automaticamente per liberare RAM. Puoi riavviarlo con 1 tocco quando vuoi!",
-                            priority="default",
-                            tags="zzz,battery"
-                        )
+                        # L'avviso al telefono parte alla fine dell'arresto (_graceful_stop_worker): prima partiva qui,
+                        # e se il comando stop non arrivava il server restava acceso ma il telefono diceva "arrestato"
+                        # (di nuovo ogni eco_mode_minutes)
                         self.server_empty_since = None
                         # Spegnimento voluto: prima, se Minecraft usciva con un codice diverso da 0 o il server era
                         # stato trovato già acceso, risultava un crash e il riavvio automatico lo riaccendeva
@@ -2149,7 +2155,7 @@ class ServerManager:
                         self.eco_sleeping = (self.config.get("server_dir") or "").strip()
                         self.config["eco_sleeping"] = self.eco_sleeping
                         self.save_config()
-                        threading.Thread(target=self._graceful_stop_worker, args=("Spegnimento automatico Modalità Eco",), daemon=True).start()
+                        threading.Thread(target=self._graceful_stop_worker, args=(self.ECO_STOP_REASON,), daemon=True).start()
                 else:
                     self.server_empty_since = None
             else:
@@ -2234,27 +2240,57 @@ class ServerManager:
         self.eco_wake = listener
         self.add_log(f"[Pannello] Modalità Eco: server in pausa, si avvierà da solo quando un giocatore prova a entrare (porta {port}).")
 
+    def _eco_stopped_alert(self):
+        """Avviso al telefono a server spento davvero dalla Modalità Eco."""
+        if self.eco_mode_enabled and self.eco_sleeping:
+            message = (f"Server vuoto da {self.eco_mode_minutes} min: spento per liberare RAM. "
+                       "Si riaccende da solo quando un giocatore prova a entrare.")
+        else:
+            # Modalità Eco disattivata durante l'arresto: il custode non si apre e il server resta spento
+            message = f"Server vuoto da {self.eco_mode_minutes} min: spento per liberare RAM."
+        self.send_push_notification(title="Modalità Eco Attivata", message=message, priority="default",
+                                    tags="zzz,battery")
+
+    def _eco_alert(self, key: str, message: str, tags: str) -> bool:
+        """Avviso della Modalità Eco che si può ripetere: al massimo uno ogni ECO_ALERT_COOLDOWN per tipo."""
+        now = time.time()
+        if now - self._eco_alert_at.get(key, 0.0) < self.ECO_ALERT_COOLDOWN:
+            return False
+        self._eco_alert_at[key] = now
+        self.send_push_notification(title="Modalità Eco", message=message, priority="default", tags=tags)
+        return True
+
     def _eco_on_login(self, player: str) -> Tuple[str, bool]:
         """Un giocatore prova a entrare nel server in pausa (chiamato dal custode): testo per lui e se si avvia."""
         blocked = self.start_blocker() if self.start_blocker else None
         if blocked:
             self.add_log(f"[Pannello] Modalità Eco: {player} ha provato a entrare, ma il server non può avviarsi adesso. {blocked}")
+            # Prima il telefono non ne sapeva niente: lo vedeva solo il giocatore
+            self._eco_alert("blocked", f"{player} ha provato a entrare, ma il server non può avviarsi adesso. {blocked}",
+                            "no_entry,video_game")
             return ECO_BLOCKED_TEXT, False
         threading.Thread(target=self._eco_wake_start, args=(player,), daemon=True).start()
         return ECO_STARTING_TEXT, True
 
     def _eco_wake_start(self, player: str):
         self.add_log(f"[Pannello] Modalità Eco: {player} ha provato a entrare, avvio del server...")
-        self.send_push_notification(
-            title="Modalità Eco",
-            message=f"{player} ha provato a entrare: il server si sta avviando.",
-            priority="default",
-            tags="alarm_clock,video_game"
-        )
+        # Dopo un avvio non riuscito ogni nuovo tentativo di entrare mandava un altro "si sta avviando": per
+        # ECO_ALERT_COOLDOWN si tace, l'avviso dell'errore è già arrivato
+        if time.time() - self._eco_alert_at.get("failed", 0.0) >= self.ECO_ALERT_COOLDOWN:
+            self.send_push_notification(
+                title="Modalità Eco",
+                message=f"{player} ha provato a entrare: il server si sta avviando.",
+                priority="default",
+                tags="alarm_clock,video_game"
+            )
         server_dir = (self.config.get("server_dir") or "").strip()
         res = self.start_server()   # toglie il custode e libera la porta prima di avviare Minecraft
         if res.get("status") == "error":
             self.add_log(f"[Pannello] Modalità Eco: avvio non riuscito. {res.get('message')}")
+            # Prima sul telefono restava solo "si sta avviando"
+            self._eco_alert("failed", f"Avvio del server non riuscito. {res.get('message') or ''}".strip()
+                            + " Il server resta in pausa: si riprova al prossimo tentativo di entrare.",
+                            "warning,video_game")
             # Il server resta in pausa: un altro tentativo di entrare lo riprova (prima nessuno poteva più avviarlo)
             with self.lock:
                 if self.eco_mode_enabled and self.state in ("STOPPED", "CRASHED", "OFFLINE"):

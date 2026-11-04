@@ -1295,6 +1295,61 @@ class PaperConsoleTest(unittest.TestCase):
         self.assertTrue(m.intentional_stop)
         self.assertTrue(started)
 
+    def test_eco_phone_alert_only_after_real_stop(self):
+        # Prima "arrestato" partiva prima dello stop: con lo stop non arrivato il server restava acceso
+        m = self.m
+        pushes = []
+        m.send_push_notification = lambda **k: pushes.append(k)
+        proc = mock.Mock(is_running=lambda: True, children=lambda recursive=False: [])
+        m.process, m.psutil_proc = None, proc
+        m.send_command = lambda c: {"status": "error", "message": "RCON non risponde."}
+        m.STOP_TIMEOUT_SECONDS, m.STOP_CONFIRM_SECONDS = 0, 1
+        m._mc_stop_seen = False
+        m.eco_mode_enabled, m.eco_mode_minutes = True, 45
+        m.eco_sleeping = m.config["eco_sleeping"] = "C:/srv"
+        with mock.patch("server_manager.time.sleep"):
+            m.state = "ONLINE"
+            m._graceful_stop_worker(m.ECO_STOP_REASON)
+        self.assertEqual(m.state, "ONLINE")
+        self.assertEqual(pushes, [])
+        # Stop riuscito: l'avviso arriva e dice che si riaccende da solo
+        m.send_command = lambda c: {"status": "success"}
+        m.psutil_proc = mock.Mock(is_running=lambda: False)
+        m.eco_sleeping = "C:/srv"
+        with mock.patch("server_manager.time.sleep"):
+            m.state = "ONLINE"
+            m._graceful_stop_worker(m.ECO_STOP_REASON)
+        self.assertEqual(m.state, "STOPPED")
+        self.assertEqual(len(pushes), 1)
+        self.assertEqual(pushes[0]["title"], "Modalità Eco Attivata")
+        self.assertIn("Si riaccende da solo", pushes[0]["message"])
+        # Altri arresti: nessun avviso Eco
+        m.psutil_proc = mock.Mock(is_running=lambda: False)
+        with mock.patch("server_manager.time.sleep"):
+            m.state = "ONLINE"
+            m._graceful_stop_worker("Arresto")
+        self.assertEqual(len(pushes), 1)
+
+    def test_eco_wake_blocked_and_failed_reach_the_phone(self):
+        m = self.m
+        pushes = []
+        m.send_push_notification = lambda **k: pushes.append(k)
+        m.add_log = lambda *a, **k: None
+        m.start_blocker = lambda: "Backup in corso: il server si potrà avviare quando sarà finito."
+        self.assertFalse(m._eco_on_login("Alice")[1])
+        self.assertFalse(m._eco_on_login("Alice")[1])
+        self.assertEqual(len(pushes), 1)   # un solo avviso ogni ECO_ALERT_COOLDOWN
+        self.assertIn("non può avviarsi adesso. Backup in corso", pushes[0]["message"])
+        pushes.clear()
+        m.start_blocker = None
+        with mock.patch.object(m, "start_server", return_value={"status": "error", "message": "Java non trovata."}):
+            m._eco_wake_start("Alice")
+            m._eco_wake_start("Bob")
+        msgs = [p["message"] for p in pushes]
+        self.assertEqual(msgs, ["Alice ha provato a entrare: il server si sta avviando.",
+                                "Avvio del server non riuscito. Java non trovata. Il server resta in pausa: "
+                                "si riprova al prossimo tentativo di entrare."])
+
     def test_anti_lag_does_not_fire_right_after_restart(self):
         # Crash per lag: prima TPS bassi e inizio del calo restavano e l'Anti-Lag puliva subito dopo il riavvio
         m = self.m
