@@ -83,14 +83,23 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Novità per telefono (v4.13.8)"
-                android:tag="t:ui.novita_telefono|v4.13.8"
+                android:text="Novità per telefono (v4.13.9)"
+                android:tag="t:ui.novita_telefono|v4.13.9"
                 android:textColor="#f4f4f5"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
 
             <!-- CONTENUTO NOVITÀ TELEFONO -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Novità (v4.13.9): con il server in pausa per la Modalità Eco l'app mostra «In pausa» invece di Offline e il pulsante Ferma è attivo: lo lascia spento davvero, senza che si riaccenda quando un giocatore prova a entrare."
+                    android:tag="t:ui.novita_v4_13_9_pausa"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -274,6 +283,16 @@
                 android:background="#0f0f11"
                 android:padding="12dp"
                 android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="• v4.13.9 (Build 115):
+Stato «In pausa» della Modalità Eco e pulsante Ferma attivo."
+                    android:tag="t:ui.v4_13_9_build_115_pausa"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="4dp" />
 
                 <TextView
                     android:layout_width="match_parent"

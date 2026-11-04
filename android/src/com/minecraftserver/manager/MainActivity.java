@@ -58,8 +58,8 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends Activity implements View.OnClickListener {
 
-    public static final int CURRENT_VERSION_CODE = 114;
-    public static final String CURRENT_VERSION_NAME = "4.13.8";
+    public static final int CURRENT_VERSION_CODE = 115;
+    public static final String CURRENT_VERSION_NAME = "4.13.9";
 
     private int dpToPx(int dp) {
         return Math.round(dp * getResources().getDisplayMetrics().density);
@@ -227,6 +227,9 @@ public class MainActivity extends Activity implements View.OnClickListener {
     private static final String PREF_PUSH_SECRET = "push_secret";
     private String mLastNotifiedBackupDate = "";
     private String mServerState = "OFFLINE";
+    // Server spento dalla Modalità Eco con il custode in ascolto sul PC: si avvia da solo quando un giocatore prova a
+    // entrare. Prima l'app lo mostrava come spento e Ferma restava grigio: non si poteva lasciarlo spento davvero
+    private boolean mEcoSleeping = false;
     // Server (istanze) configurati sul PC: con più di uno la Dashboard mostra quale è attivo e permette di cambiarlo
     private JSONArray mInstances = new JSONArray();
     private String mActiveInstanceName = "";
@@ -1980,6 +1983,8 @@ public class MainActivity extends Activity implements View.OnClickListener {
                     JSONObject obj = new JSONObject(response);
                     String state = obj.optString("state", "OFFLINE");
                     mServerState = state;
+                    JSONObject ecoState = obj.optJSONObject("eco_mode");
+                    mEcoSleeping = ecoState != null && ecoState.optBoolean("sleeping", false);
                     if (mBackupAfterStop && ("STOPPED".equalsIgnoreCase(state) || "OFFLINE".equalsIgnoreCase(state) || "CRASHED".equalsIgnoreCase(state))) {
                         mBackupAfterStop = false;
                         startBackupAction();
@@ -2061,6 +2066,25 @@ public class MainActivity extends Activity implements View.OnClickListener {
                         btnActionStop.setAlpha(0.4f);
                         btnActionRestart.setEnabled(true);
                         btnActionRestart.setAlpha(1.0f);
+                    } else if (mEcoSleeping) {
+                        // In pausa per la Modalità Eco (come "IN PAUSA" nel pannello del PC): Ferma toglie la pausa
+                        pillServerStatus.setText(I18n.t("app.in_pausa"));
+                        pillServerStatus.setBackgroundResource(R.drawable.pill_pending);
+                        pillServerStatus.setTextColor(Color.parseColor("#e3b35a"));
+
+                        pillServerStatus2.setText(I18n.t("app.in_pausa"));
+                        pillServerStatus2.setBackgroundResource(R.drawable.pill_pending);
+                        pillServerStatus2.setTextColor(Color.parseColor("#e3b35a"));
+
+                        txtMainStatus.setText(I18n.t("app.server_in_pausa_eco"));
+                        txtMainStatus.setTextColor(Color.parseColor("#e3b35a"));
+
+                        btnActionStart.setEnabled(true);
+                        btnActionStart.setAlpha(1.0f);
+                        btnActionStop.setEnabled(true);
+                        btnActionStop.setAlpha(1.0f);
+                        btnActionRestart.setEnabled(false);
+                        btnActionRestart.setAlpha(0.4f);
                     } else {
                         pillServerStatus.setText(I18n.t("ui.offline"));
                         pillServerStatus.setBackgroundResource(R.drawable.pill_offline);
@@ -5053,9 +5077,10 @@ public class MainActivity extends Activity implements View.OnClickListener {
     }
 
     private void confirmStopServer(final boolean backupAfter) {
+        final boolean paused = mEcoSleeping && !backupAfter;
         new I18n.Builder(this)
             .setTitle(I18n.t("app.conferma_arresto"))
-            .setMessage(I18n.t("app.vuoi_arrestare_server_minecraft"))
+            .setMessage(paused ? I18n.t("app.vuoi_fermare_pausa_eco") : I18n.t("app.vuoi_arrestare_server_minecraft"))
             .setPositiveButton(I18n.t("ui.arresta"), new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialog, int which) {
@@ -5063,7 +5088,13 @@ public class MainActivity extends Activity implements View.OnClickListener {
                         @Override
                         public void onSuccess(String response) {
                             mBackupAfterStop = backupAfter;
-                            I18n.makeText(MainActivity.this, I18n.t("app.arresto_server_inviato"), Toast.LENGTH_SHORT).show();
+                            String pcMsg = "";
+                            try {
+                                pcMsg = new JSONObject(response).optString("message", "");
+                            } catch (Exception ignored) {}
+                            // Pausa tolta: il PC dice che il server resta spento ("Server in pausa fermato: ...")
+                            String toast = paused && !pcMsg.isEmpty() ? I18n.fromPc(pcMsg) : I18n.t("app.arresto_server_inviato");
+                            I18n.makeText(MainActivity.this, toast, paused ? Toast.LENGTH_LONG : Toast.LENGTH_SHORT).show();
                             fetchStatus();
                         }
                         @Override
