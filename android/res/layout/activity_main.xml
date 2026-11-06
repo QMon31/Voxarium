@@ -1228,10 +1228,11 @@
                 android:layout_marginBottom="12dp">
 
                 <TextView
+                    android:id="@+id/txtRestartTitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Riavvio programmato (ogni 4 ore)"
-                    android:tag="t:ui.riavvio_programmato_ogni_4_ore"
+                    android:tag="notr"
                     android:textColor="#9a9ca2"
                     android:textSize="13sp"
                     android:textStyle="bold" />
@@ -1293,7 +1294,7 @@
                     android:layout_height="44dp"
                     android:background="@drawable/btn_slate"
                     android:text="Reimposta timer a 4 ore"
-                    android:tag="t:ui.reimposta_timer_4_ore"
+                    android:tag="notr"
                     android:textColor="#c4c4c8"
                     android:textSize="12sp"
                     android:layout_marginBottom="8dp" />

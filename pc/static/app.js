@@ -3124,7 +3124,7 @@ async function toggleScheduledRestart(enabled) {
     });
     if (res.ok) {
       if (typeof showToast === 'function') {
-        showToast(enabled ? t('actions.riavvio_programmato_ogni_4_ore') : t('actions.riavvio_programmato_disattivato'), 'info');
+        showToast(enabled ? t('actions.riavvio_programmato_attivato') : t('actions.riavvio_programmato_disattivato'), 'info');
       }
     } else {
       if (typeof showToast === 'function') {

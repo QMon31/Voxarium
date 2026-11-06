@@ -58,8 +58,8 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends Activity implements View.OnClickListener {
 
-    public static final int CURRENT_VERSION_CODE = 115;
-    public static final String CURRENT_VERSION_NAME = "4.13.9";
+    public static final int CURRENT_VERSION_CODE = 116;
+    public static final String CURRENT_VERSION_NAME = "4.13.10";
 
     private int dpToPx(int dp) {
         return Math.round(dp * getResources().getDisplayMetrics().density);
@@ -139,6 +139,9 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
     // Auto-Restart Widgets
     private TextView txtRestartCountdown;
+    // Intervallo del riavvio programmato scelto sul PC (minuti): prima i testi dicevano sempre "ogni 4 ore"
+    private TextView txtRestartTitle;
+    private int mRestartIntervalMin = 240;
     private ProgressBar progBarRestart;
     private Button btnPostponeRestart, btnResetRestartTimer, btnRestartServerNow;
 
@@ -481,6 +484,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
         // Auto-Restart
         txtRestartCountdown = findViewById(R.id.txtRestartCountdown);
+        txtRestartTitle = findViewById(R.id.txtRestartTitle);
         progBarRestart = findViewById(R.id.progBarRestart);
         btnPostponeRestart = findViewById(R.id.btnPostponeRestart);
         btnResetRestartTimer = findViewById(R.id.btnResetRestartTimer);
@@ -789,7 +793,8 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 break;
             case 5:
                 txtHeaderTitle.setText(I18n.t("ui.riavvio_programmato"));
-                txtHeaderSubtitle.setText(I18n.t("app.ogni_4_ore"));
+                txtHeaderSubtitle.setText(I18n.t("app.ogni_intervallo", formatInterval(mRestartIntervalMin)));
+                showRestartInterval();
                 fetchStatus();
                 break;
             case 6:
@@ -2140,6 +2145,12 @@ public class MainActivity extends Activity implements View.OnClickListener {
                     // Scheduled restart timer parsing
                     JSONObject restartObj = obj.optJSONObject("scheduled_restart");
                     if (restartObj != null) {
+                        int interval = restartObj.optInt("interval_minutes", mRestartIntervalMin);
+                        if (interval > 0) mRestartIntervalMin = interval;
+                        showRestartInterval();
+                        if (viewAutoRestart.getVisibility() == View.VISIBLE) {
+                            txtHeaderSubtitle.setText(I18n.t("app.ogni_intervallo", formatInterval(mRestartIntervalMin)));
+                        }
                         String formatted = restartObj.optString("remaining_formatted", "");
                         if (formatted.isEmpty()) {
                             formatted = restartObj.optString("formatted", "04h 00m 00s");
@@ -5070,6 +5081,21 @@ public class MainActivity extends Activity implements View.OnClickListener {
             })
             .setNegativeButton(I18n.t("app.annulla"), null)
             .show();
+    }
+
+    /** "4 ore", "1 ora e 30 minuti", "45 minuti" (testi tradotti). */
+    private static String formatInterval(int minutes) {
+        int h = minutes / 60, m = minutes % 60;
+        String hours = I18n.t(h == 1 ? "app.durata_ora" : "app.durata_ore", h);
+        String mins = I18n.t(m == 1 ? "app.durata_minuto" : "app.durata_minuti", m);
+        if (h == 0) return mins;
+        return m == 0 ? hours : I18n.t("app.durata_ore_e_minuti", hours, mins);
+    }
+
+    private void showRestartInterval() {
+        String every = formatInterval(mRestartIntervalMin);
+        if (txtRestartTitle != null) txtRestartTitle.setText(I18n.t("app.riavvio_programmato_ogni", every));
+        if (btnResetRestartTimer != null) btnResetRestartTimer.setText(I18n.t("app.reimposta_timer_a", every));
     }
 
     private void confirmStopServer() {

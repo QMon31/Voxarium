@@ -321,6 +321,8 @@ class ServerManager:
         self._eco_wake_retry_at = 0.0
         # Ultimo invio al telefono di ogni avviso della Modalità Eco che si può ripetere (risveglio bloccato o fallito)
         self._eco_alert_at: Dict[str, float] = {}
+        # Avviso "spegnimento Eco non riuscito" già mandato: non si ripete finché un arresto non riesce
+        self._eco_stop_failed_alerted = False
 
         # Anti-Lag Watchdog (Detect low TPS and auto clean ground items)
         self.anti_lag_enabled = self.config.get("anti_lag_enabled", True)
@@ -1401,6 +1403,15 @@ class ServerManager:
             time.sleep(2)
             stop_res = self.send_command("stop")
             if stop_res.get("status") == "error" and self._stop_not_delivered(stop_res.get("message") or ""):
+                if reason == self.ECO_STOP_REASON and not self._eco_stop_failed_alerted:
+                    # Un solo avviso: la Modalità Eco ci riprova ogni eco_mode_minutes e il telefono si riempiva.
+                    # Torna possibile dopo un arresto riuscito
+                    self._eco_stop_failed_alerted = True
+                    self.send_push_notification(
+                        title="Modalità Eco",
+                        message="Spegnimento non riuscito: il comando stop non è arrivato a Minecraft e il server "
+                                "resta acceso. Chiudilo dalla sua finestra oppure usa l'arresto forzato.",
+                        priority="default", tags="warning,battery")
                 return
 
             # Attesa fino a STOP_TIMEOUT_SECONDS: un server con molte mod o un mondo grande può metterci più di
@@ -1438,6 +1449,7 @@ class ServerManager:
                 self.psutil_proc = None
                 self.server_info["online"] = False
                 self.players.clear()
+                self._eco_stop_failed_alerted = False   # arresto riuscito: un nuovo errore si può segnalare
                 if not restarting:
                     self.add_log("[Pannello] Server arrestato con successo.")
                     if reason == self.ECO_STOP_REASON:
@@ -1559,6 +1571,14 @@ class ServerManager:
                 "formatted": self.format_seconds(self.scheduled_remaining_seconds)
             }
 
+    def _restart_interval_words(self) -> str:
+        """Intervallo del riavvio programmato per console e chat: "4 ore" o "90 minuti". Prima i testi dicevano sempre
+        "4 ore" anche con un altro intervallo. Solo queste due forme, che pannello e app riconoscono e traducono."""
+        minutes = int(self.config.get("scheduled_restart_interval_minutes", 240) or 240)
+        if minutes >= 120 and minutes % 60 == 0:
+            return f"{minutes // 60} ore"
+        return f"{minutes} minuti"
+
     def toggle_scheduled_restart(self, enabled: Optional[bool] = None) -> Dict[str, Any]:
         with self.lock:
             if enabled is None:
@@ -1568,7 +1588,7 @@ class ServerManager:
             self.config["scheduled_restart_enabled"] = self.scheduled_enabled
             self.save_config()
             status_text = "ATTIVATO" if self.scheduled_enabled else "DISATTIVATO"
-            self.add_log(f"[Pannello] Riavvio automatico ogni 4 ore: {status_text}")
+            self.add_log(f"[Pannello] Riavvio automatico ogni {self._restart_interval_words()}: {status_text}")
             return {"status": "success", "enabled": self.scheduled_enabled}
 
     def set_scheduled_interval(self, minutes: int) -> Dict[str, Any]:
@@ -2124,11 +2144,11 @@ class ServerManager:
                         self.send_command(f"say §c[Server] Riavvio tra {rem}...")
 
                 if rem <= 0:
-                    self.add_log("[Pannello] ⏱️ Timer 4 ore scaduto. Avvio riavvio programmato del server...")
+                    self.add_log(f"[Pannello] ⏱️ Timer di {self._restart_interval_words()} scaduto. Avvio riavvio programmato del server...")
                     self.scheduled_restart_in_progress = True
                     self.scheduled_remaining_seconds = self.scheduled_interval_seconds
                     self.warning_sent_flags.clear()
-                    threading.Thread(target=self._graceful_stop_worker, args=("Riavvio programmato 4 ore per liberare RAM",), daemon=True).start()
+                    threading.Thread(target=self._graceful_stop_worker, args=(f"Riavvio programmato ogni {self._restart_interval_words()} per liberare RAM",), daemon=True).start()
 
             # --- ECO MODE CHECK ---
             if self.state == "ONLINE" and self.eco_mode_enabled:

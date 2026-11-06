@@ -1308,10 +1308,16 @@ class PaperConsoleTest(unittest.TestCase):
         m.eco_mode_enabled, m.eco_mode_minutes = True, 45
         m.eco_sleeping = m.config["eco_sleeping"] = "C:/srv"
         with mock.patch("server_manager.time.sleep"):
-            m.state = "ONLINE"
-            m._graceful_stop_worker(m.ECO_STOP_REASON)
+            for _ in range(2):   # la Modalità Eco riprova dopo eco_mode_minutes: un solo avviso
+                m.state = "ONLINE"
+                m.eco_sleeping = "C:/srv"
+                m._graceful_stop_worker(m.ECO_STOP_REASON)
         self.assertEqual(m.state, "ONLINE")
-        self.assertEqual(pushes, [])
+        self.assertEqual(len(pushes), 1)
+        self.assertEqual(pushes[0]["title"], "Modalità Eco")
+        self.assertIn("Spegnimento non riuscito", pushes[0]["message"])
+        self.assertNotIn("Attivata", pushes[0]["title"])
+        pushes.clear()
         # Stop riuscito: l'avviso arriva e dice che si riaccende da solo
         m.send_command = lambda c: {"status": "success"}
         m.psutil_proc = mock.Mock(is_running=lambda: False)
@@ -1323,12 +1329,30 @@ class PaperConsoleTest(unittest.TestCase):
         self.assertEqual(len(pushes), 1)
         self.assertEqual(pushes[0]["title"], "Modalità Eco Attivata")
         self.assertIn("Si riaccende da solo", pushes[0]["message"])
+        self.assertFalse(m._eco_stop_failed_alerted)   # un nuovo errore si potrà segnalare
         # Altri arresti: nessun avviso Eco
         m.psutil_proc = mock.Mock(is_running=lambda: False)
         with mock.patch("server_manager.time.sleep"):
             m.state = "ONLINE"
             m._graceful_stop_worker("Arresto")
         self.assertEqual(len(pushes), 1)
+
+    def test_scheduled_restart_texts_use_real_interval(self):
+        # Prima console e chat dicevano sempre "4 ore", anche con un altro intervallo
+        m = self.m
+        logs = []
+        m.add_log = lambda line, *a, **k: logs.append(line)
+        for minutes, words in ((240, "4 ore"), (120, "2 ore"), (90, "90 minuti"), (60, "60 minuti"), (30, "30 minuti")):
+            m.config["scheduled_restart_interval_minutes"] = minutes
+            self.assertEqual(m._restart_interval_words(), words)
+        m.config["scheduled_restart_interval_minutes"] = 90
+        m.save_config = lambda *a, **k: None
+        m.toggle_scheduled_restart(True)
+        self.assertEqual(logs[-1], "[Pannello] Riavvio automatico ogni 90 minuti: ATTIVATO")
+        src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "server_manager.py"),
+                   encoding="utf-8").read()
+        self.assertNotIn("Timer 4 ore", src)
+        self.assertNotIn("Riavvio programmato 4 ore", src)
 
     def test_eco_wake_blocked_and_failed_reach_the_phone(self):
         m = self.m

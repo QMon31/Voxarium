@@ -83,14 +83,23 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Novità per telefono (v4.13.9)"
-                android:tag="t:ui.novita_telefono|v4.13.9"
+                android:text="Novità per telefono (v4.13.10)"
+                android:tag="t:ui.novita_telefono|v4.13.10"
                 android:textColor="#f4f4f5"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
 
             <!-- CONTENUTO NOVITÀ TELEFONO -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Novità (v4.13.10): il widget mostra «In pausa» quando la Modalità Eco ha messo in pausa il server; la schermata del riavvio programmato mostra l'intervallo scelto sul PC invece di «ogni 4 ore»; gli avvisi della Modalità Eco e dello spazio su disco non finiscono più tra le notifiche dei backup."
+                    android:tag="t:ui.novita_v4_13_10_widget"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -283,6 +292,16 @@
                 android:background="#0f0f11"
                 android:padding="12dp"
                 android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="• v4.13.10 (Build 116):
+Widget «In pausa», intervallo vero del riavvio programmato, notifiche nella categoria giusta."
+                    android:tag="t:ui.v4_13_10_build_116_widget"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="4dp" />
 
                 <TextView
                     android:layout_width="match_parent"

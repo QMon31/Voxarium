@@ -2601,10 +2601,13 @@ class SettingsDirAndInterruptedRestoreTest(unittest.TestCase):
         cfg = {**app_mod.manager.config, "server_dir": ROOT}
         opened = []
         fake_open = lambda ext, **kw: opened.append((ext, kw.get("internal_port"))) or {"success": True}
+        # Anche listening_port: il manager di app.py nasce dal config.json vero e, se si aggancia al Minecraft acceso
+        # sulla 32769, la porta in ascolto era quella e il test falliva (04/11/2026)
         with mock.patch.object(app_mod.manager, "config", cfg), \
                 mock.patch.object(app_mod.manager, "save_config"), \
                 mock.patch.object(app_mod.manager, "remember_server_port"), \
                 mock.patch.object(app_mod.manager, "get_server_port", return_value=25565), \
+                mock.patch.object(app_mod.manager, "listening_port", return_value=25565), \
                 mock.patch.object(app_mod, "upnp_mgr", upnp_manager.UPnPManager()), \
                 mock.patch.object(app_mod, "broadcast_network_update"), \
                 mock.patch.dict(app_mod._mc_port_state, {"port": None, "last_open": 0.0, "retry_at": 0.0, "active": None}):

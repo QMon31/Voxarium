@@ -277,8 +277,11 @@ public class ServerWidgetProvider extends AppWidgetProvider {
                     ramGb = metrics.optDouble("mc_ram_gb", 0.0);
                 }
                 double tps = json.optDouble("tps", 20.0);
+                // Server in pausa per la Modalità Eco (custode in ascolto sul PC): prima il widget diceva solo "spento"
+                JSONObject eco = json.optJSONObject("eco_mode");
+                boolean ecoSleeping = eco != null && eco.optBoolean("sleeping", false);
 
-                updateWidgetUI(context, state, playersOnline, maxPlayers, ramGb, tps);
+                updateWidgetUI(context, state, ecoSleeping, playersOnline, maxPlayers, ramGb, tps);
             }
             conn.disconnect();
         } catch (Exception ignored) {}
@@ -390,7 +393,7 @@ public class ServerWidgetProvider extends AppWidgetProvider {
         }
     }
 
-    private static void updateWidgetUI(Context context, String state, int playersOnline, int maxPlayers, double ramGb, double tps) {
+    private static void updateWidgetUI(Context context, String state, boolean ecoSleeping, int playersOnline, int maxPlayers, double ramGb, double tps) {
         AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
         ComponentName thisWidget = new ComponentName(context, ServerWidgetProvider.class);
         int[] allWidgetIds = appWidgetManager.getAppWidgetIds(thisWidget);
@@ -404,8 +407,11 @@ public class ServerWidgetProvider extends AppWidgetProvider {
         views.setTextViewText(R.id.widget_btn_stop, I18n.t("widget.ferma"));
 
         I18n.ensure(context);
-        views.setTextViewText(R.id.widget_status_pill, I18n.fromPc(state));
-        if ("ONLINE".equalsIgnoreCase(state)) {
+        boolean paused = ecoSleeping && !"ONLINE".equalsIgnoreCase(state) && !isTransitionState(state);
+        views.setTextViewText(R.id.widget_status_pill, paused ? I18n.t("app.in_pausa") : I18n.fromPc(state));
+        if (paused) {
+            views.setTextColor(R.id.widget_status_pill, Color.parseColor("#e3b35a"));
+        } else if ("ONLINE".equalsIgnoreCase(state)) {
             views.setTextColor(R.id.widget_status_pill, Color.parseColor("#a5d36f"));
         } else if ("CRASHED".equalsIgnoreCase(state)) {
             views.setTextColor(R.id.widget_status_pill, Color.parseColor("#f0788c"));

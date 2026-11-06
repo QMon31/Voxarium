@@ -1,8 +1,8 @@
 {
-  "version_code": 114,
-  "version_name": "4.13.8",
+  "version_code": 116,
+  "version_name": "4.13.10",
   "download_url": "/static/Controllo_Server_Minecraft.apk",
-  "release_notes": "v4.13.8: le notifiche che arrivano dal PC (Modalità Eco, giocatori, lag, memoria, disco, crash, backup, accessi da internet) sono tradotte nella lingua dell'app.",
+  "release_notes": "v4.13.10: il widget mostra «In pausa» con la Modalità Eco; il riavvio programmato mostra l'intervallo scelto sul PC; gli avvisi Eco e di spazio su disco non finiscono più tra le notifiche dei backup.",
   "min_sdk": 26,
   "target_sdk": 35
 }

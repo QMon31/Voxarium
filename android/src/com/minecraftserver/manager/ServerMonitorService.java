@@ -336,7 +336,10 @@ public class ServerMonitorService extends Service {
                                         // Sincronizzazione 100% invisibile e silenziosa in background: nessuna notifica a schermo
                                     } else if (!isAlertAuthentic(msgObj)) {
                                         // Avviso senza firma valida del proprio PC (o più vecchio di 24 ore): scartato
-                                    } else if (lowerTitle.contains("backup") || lowerMsg.contains("backup")) {
+                                    } else if (lowerTitle.contains("backup") || lowerTitle.contains("ripristino")) {
+                                        // Solo dal titolo ("Backup Server Completato!", "Ripristino Completato!"): prima
+                                        // bastava la parola nel testo e finivano tra i backup anche "Modalità Eco: ...
+                                        // Backup in corso" e "Spazio Disco Critico ... I backup potrebbero non andare"
                                         triggerBackupNotification(title, message);
                                     } else if (lowerTitle.contains("warning") || lowerTitle.contains("crash") || lowerTitle.contains("errore")) {
                                         triggerCrashNotification(title, message);
