@@ -152,7 +152,9 @@ class RemoteAccess:
         except Exception:
             ip = None
         try:
-            if not ip or ipaddress.ip_address(ip).is_private:
+            # is_global e non "non privato": un router dietro la rete condivisa dell'operatore (CGNAT) riporta un
+            # 100.64.x.x, che non è privato per Python ma non si raggiunge da internet. Prima finiva al telefono
+            if not ip or not ipaddress.ip_address(ip).is_global:
                 ip = self._get_public_ip(True) or None   # router senza UPnP o dietro un altro router
         except ValueError:
             ip = self._get_public_ip(True) or None

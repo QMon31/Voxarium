@@ -668,6 +668,7 @@
 "pc.notif_spazio_disco": "Speicherplatz kritisch",
 "pc.notif_spazio_disco_testo": "Freier Speicher auf Laufwerk {0} unter 10 GB ({1} GB übrig)! Backups könnten fehlschlagen.",
 "pc.notif_crash": "Minecraft-Server abgestürzt!",
+"pc.notif_crash_loop": "Der Server ist {0}-mal in {1} Minuten abgestürzt: automatischer Neustart ausgesetzt, der Server bleibt aus. Prüfe die Absturzberichte und starte ihn im Panel.",
 "pc.notif_crash_testo": "Der Server wurde unerwartet beendet (Exit-Code: {0}). Tippen, um die Verwaltung zu öffnen.",
 "pc.notif_backup_completato_testo": "Das Backup des Minecraft-Servers ({0} MB) wurde erfolgreich abgeschlossen{1}!{2}",
 "pc.notif_backup_cloud": "(In der Cloud synchronisiert)",

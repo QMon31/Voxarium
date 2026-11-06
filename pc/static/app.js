@@ -308,7 +308,7 @@ function updateHostOnlyVisibility(isLocal) {
   });
 }
 
-function showToast(message, type = 'info') {
+function showToast(message, type = 'info', durationMs = 3500) {
   let container = document.getElementById('global-toast-container');
   if (!container) {
     container = document.createElement('div');
@@ -323,7 +323,7 @@ function showToast(message, type = 'info') {
   setTimeout(() => {
     toast.classList.add('fade-out');
     setTimeout(() => { try { toast.remove(); } catch(e){} }, 400);
-  }, 3500);
+  }, durationMs);
 }
 
 async function checkPcUpdate(force = false) {
@@ -10493,6 +10493,9 @@ async function installStoreProject(projectId, projectTitle, projectType, btnId) 
     if (!res.ok) throw new Error(data.detail || t('msg.installazione_fallita_2'));
 
     showToast(t('msg.installato_successo', projectTitle, data.dest_folder), 'success');
+    // Dipendenze obbligatorie mancanti (es. Fabric API): prima il server non partiva senza che nessuno lo dicesse
+    const missingDeps = (data.missing_dependencies || []).map(d => d.title || d.slug || d.project_id).filter(Boolean);
+    if (missingDeps.length) showToast(t('msg.store_dipendenze_mancanti', missingDeps.join(', ')), 'warning', 12000);
 
     // Update card state in DOM
     const card = document.getElementById(`card-store-${projectId}`);

@@ -2044,18 +2044,26 @@ class ServerManager:
         self.errors_list.append(err_item)
         self._broadcast_error(err_item)
 
+        now = time.time()
+        recent_crashes = [c for c in self.crash_history if now - c["timestamp"] <= self.crash_window_seconds]
+        loop = len(recent_crashes) >= self.max_crashes_in_window
+
         # Send instant Push Notification to smartphone via ntfy (0% phone battery)
+        if loop and not self.auto_restart_paused:
+            # Prima arrivava lo stesso avviso dei crash normali e non si sapeva che il server restava spento
+            message = (f"Il server è andato in crash {len(recent_crashes)} volte in "
+                       f"{max(1, self.crash_window_seconds // 60)} minuti: riavvio automatico sospeso, il server resta "
+                       f"spento. Controlla i crash report e avvialo dal pannello.")
+        else:
+            message = f"Il server si è arrestato inaspettatamente (Codice di uscita: {code_txt}). Tocca per aprire la gestione."
         self.send_push_notification(
             title="Server Minecraft Crashato!",
-            message=f"Il server si è arrestato inaspettatamente (Codice di uscita: {code_txt}). Tocca per aprire la gestione.",
+            message=message,
             priority="max",
             tags="warning,skull"
         )
 
-        now = time.time()
-        recent_crashes = [c for c in self.crash_history if now - c["timestamp"] <= self.crash_window_seconds]
-        
-        if len(recent_crashes) >= self.max_crashes_in_window:
+        if loop:
             self.auto_restart_paused = True
             self.add_log(f"[Pannello/CRITICO] Rilevati {len(recent_crashes)} crash negli ultimi {self.crash_window_seconds} secondi. "
                          f"Riavvio automatico SOSPESO per proteggere il sistema da crash loop. Controllare crash-reports!")

@@ -668,6 +668,7 @@
 "pc.notif_spazio_disco": "Espacio en disco crítico",
 "pc.notif_spazio_disco_testo": "¡Espacio libre en el disco {0} inferior a 10 GB ({1} GB restantes)! Las copias de seguridad podrían fallar.",
 "pc.notif_crash": "¡El servidor de Minecraft se ha bloqueado!",
+"pc.notif_crash_loop": "El servidor se ha bloqueado {0} veces en {1} minutos: reinicio automático suspendido, el servidor sigue apagado. Revisa los informes de fallos e inícialo desde el panel.",
 "pc.notif_crash_testo": "El servidor se ha detenido inesperadamente (Código de salida: {0}). Toca para abrir la gestión.",
 "pc.notif_backup_completato_testo": "¡La copia de seguridad de {0} MB del servidor de Minecraft ha terminado correctamente{1}!{2}",
 "pc.notif_backup_cloud": "(Sincronizado en la nube)",

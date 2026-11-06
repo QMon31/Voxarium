@@ -668,6 +668,7 @@
 "pc.notif_spazio_disco": "Espace disque critique",
 "pc.notif_spazio_disco_testo": "Espace libre sur le disque {0} inférieur à 10 Go ({1} Go restants) ! Les sauvegardes pourraient échouer.",
 "pc.notif_crash": "Le serveur Minecraft a planté !",
+"pc.notif_crash_loop": "Le serveur a planté {0} fois en {1} minutes : redémarrage automatique suspendu, le serveur reste éteint. Vérifiez les rapports de plantage et démarrez-le depuis le panneau.",
 "pc.notif_crash_testo": "Le serveur s'est arrêté de façon inattendue (Code de sortie : {0}). Touchez pour ouvrir la gestion.",
 "pc.notif_backup_completato_testo": "La sauvegarde de {0} Mo du serveur Minecraft s'est terminée avec succès{1} !{2}",
 "pc.notif_backup_cloud": "(Synchronisé dans le cloud)",

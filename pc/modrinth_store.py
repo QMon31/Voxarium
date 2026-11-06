@@ -533,6 +533,7 @@ def install_modrinth_project(
         return {"success": False, "error": "Nessuna versione disponibile per questo progetto."}
 
     chosen_file = None
+    chosen_version: Dict[str, Any] = {}
     version_name = ""
     for v in v_list:
         jars = [f for f in v.get("files", []) if f.get("filename", "").lower().endswith(".jar")]
@@ -540,6 +541,7 @@ def install_modrinth_project(
         chosen_file = next((f for f in jars if f.get("primary")), jars[0] if jars else None)
         if chosen_file:
             version_name = v.get("version_number", v.get("name", ""))
+            chosen_version = v
             break
 
     if not chosen_file:
@@ -587,10 +589,45 @@ def install_modrinth_project(
             "dest_folder": f"{target_subdir}/",
             "path": target_file_path,
             "installed_info": record,
+            "missing_dependencies": missing_required_dependencies(chosen_version, server_dir, installed),
             "message": f"'{filename}' ({format_file_size(file_size)}) installato con successo nella cartella {target_subdir}/!"
         }
     except Exception as e:
         return {"success": False, "error": f"Errore durante il download del file: {e}"}
+
+
+def missing_required_dependencies(version: Dict[str, Any], server_dir: str,
+                                  installed: Dict[str, Any]) -> List[Dict[str, str]]:
+    """Dipendenze obbligatorie della versione installata che non risultano sul server: [{project_id, slug, title}].
+    Prima lo Store installava solo la mod scelta e il server non partiva per una dipendenza mancante (es. Fabric API)
+    senza che nessuno lo dicesse. Un errore di rete non blocca l'installazione: si restituisce quello che si sa."""
+    ids = []
+    for d in (version or {}).get("dependencies") or []:
+        pid = d.get("project_id") if isinstance(d, dict) else None
+        if d and d.get("dependency_type") == "required" and isinstance(pid, str) and pid and pid not in ids:
+            ids.append(pid)
+    if not ids:
+        return []
+    projects: Dict[str, Dict[str, Any]] = {}
+    try:
+        url = "https://api.modrinth.com/v2/projects?" + urllib.parse.urlencode({"ids": json.dumps(ids)})
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            for p in json.loads(resp.read().decode("utf-8")) or []:
+                if isinstance(p, dict) and p.get("id"):
+                    projects[p["id"]] = p
+    except Exception:
+        pass
+    if not projects:
+        # Senza nomi non si riconoscono le mod messe a mano: meglio nessun avviso che uno sbagliato
+        return []
+    missing = []
+    for pid in ids:
+        p = projects.get(pid, {})
+        slug, title = str(p.get("slug") or ""), str(p.get("title") or "")
+        if not is_project_installed_on_disk(server_dir, pid, slug, title, installed):
+            missing.append({"project_id": pid, "slug": slug, "title": title or slug or pid})
+    return missing
 
 
 def uninstall_modrinth_project(

@@ -668,6 +668,7 @@
 "pc.notif_spazio_disco": "Spazio Disco Critico",
 "pc.notif_spazio_disco_testo": "Spazio libero su disco {0} inferiore a 10 GB ({1} GB rimanenti)! I backup potrebbero non andare a buon fine.",
 "pc.notif_crash": "Server Minecraft Crashato!",
+"pc.notif_crash_loop": "Il server è andato in crash {0} volte in {1} minuti: riavvio automatico sospeso, il server resta spento. Controlla i crash report e avvialo dal pannello.",
 "pc.notif_crash_testo": "Il server si è arrestato inaspettatamente (Codice di uscita: {0}). Tocca per aprire la gestione.",
 "pc.notif_backup_completato_testo": "Il backup del server Minecraft da {0} MB è terminato con successo{1}!{2}",
 "pc.notif_backup_cloud": "(Sincronizzato su Cloud)",

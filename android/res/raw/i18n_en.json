@@ -668,6 +668,7 @@
 "pc.notif_spazio_disco": "Disk Space Critical",
 "pc.notif_spazio_disco_testo": "Free space on disk {0} below 10 GB ({1} GB left)! Backups may fail.",
 "pc.notif_crash": "Minecraft Server Crashed!",
+"pc.notif_crash_loop": "The server crashed {0} times in {1} minutes: automatic restart suspended, the server stays off. Check the crash reports and start it from the panel.",
 "pc.notif_crash_testo": "The server stopped unexpectedly (Exit code: {0}). Tap to open the controls.",
 "pc.notif_backup_completato_testo": "The {0} MB Minecraft server backup finished successfully{1}!{2}",
 "pc.notif_backup_cloud": "(Synced to the cloud)",

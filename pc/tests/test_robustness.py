@@ -1337,6 +1337,83 @@ class PaperConsoleTest(unittest.TestCase):
             m._graceful_stop_worker("Arresto")
         self.assertEqual(len(pushes), 1)
 
+    def test_crash_loop_alert_says_auto_restart_is_suspended(self):
+        # Prima il crash che sospende il riavvio automatico mandava lo stesso avviso dei crash normali
+        m = self.m
+        pushes = []
+        m.send_push_notification = lambda **k: pushes.append(k["message"])
+        m.add_log = lambda *a, **k: None
+        m.auto_restart_on_crash = False
+        m.auto_restart_paused = False
+        m.crash_history.clear()
+        with m.lock:
+            for _ in range(m.max_crashes_in_window):
+                m._register_unexpected_exit(1)
+        self.assertTrue(m.auto_restart_paused)
+        self.assertIn("Codice di uscita: 1", pushes[0])
+        self.assertIn("riavvio automatico sospeso", pushes[-1])
+        self.assertEqual(sum("sospeso" in p for p in pushes), 1)
+
+    def test_public_ip_ignores_carrier_grade_nat_address(self):
+        # Router dietro CGNAT: riporta 100.64.x.x, non privato per Python ma irraggiungibile da internet
+        import remote_access as ra
+        ra_obj = ra.RemoteAccess.__new__(ra.RemoteAccess)
+        ra_obj.upnp = mock.Mock(get_external_ip=lambda: "100.71.4.9")
+        ra_obj._get_public_ip = lambda force: "93.40.12.34"
+        self.assertEqual(ra_obj._read_public_ip(), "93.40.12.34")
+        ra_obj.upnp = mock.Mock(get_external_ip=lambda: "151.20.3.4")
+        self.assertEqual(ra_obj._read_public_ip(), "151.20.3.4")
+        ra_obj.upnp = mock.Mock(get_external_ip=lambda: "192.168.1.254")
+        self.assertEqual(ra_obj._read_public_ip(), "93.40.12.34")
+
+    def test_store_install_reports_missing_required_dependencies(self):
+        # Prima lo Store installava solo la mod scelta: senza Fabric API il server non partiva e nessuno lo diceva
+        import io
+        import modrinth_store as ms
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        version = {"version_number": "1.0", "dependencies": [
+            {"project_id": "P7dR8mSH", "dependency_type": "required"},
+            {"project_id": "OPTIONAL1", "dependency_type": "optional"}],
+            "files": [{"filename": "coolmod-1.0.jar", "primary": True,
+                       "url": "https://cdn.modrinth.com/data/x/coolmod-1.0.jar", "hashes": {}}]}
+        projects_ok = [{"id": "P7dR8mSH", "slug": "fabric-api", "title": "Fabric API"}]
+        state = {"projects": projects_ok}
+
+        def fake_urlopen(req, timeout=0):
+            url = req.full_url if hasattr(req, "full_url") else str(req)
+            if "/v2/projects?" in url:
+                if state["projects"] is None:
+                    raise OSError("rete assente")
+                body = state["projects"]
+            else:
+                body = [version]
+            r = io.BytesIO(json.dumps(body).encode("utf-8"))
+            r.__enter__ = lambda *a: r
+            r.__exit__ = lambda *a: None
+            return r
+
+        def fake_download(url, path, *a, **k):
+            with open(path, "wb") as f:
+                f.write(b"PK\x03\x04jar")
+
+        with mock.patch.object(ms.urllib.request, "urlopen", side_effect=fake_urlopen), \
+                mock.patch.object(ms, "download_file", side_effect=fake_download):
+            res = ms.install_modrinth_project("coolmod", d, loader="fabric", version="1.20.1")
+            self.assertTrue(res["success"])
+            self.assertEqual([x["title"] for x in res["missing_dependencies"]], ["Fabric API"])
+            # Fabric API già nella cartella (messa a mano): nessun avviso
+            with open(os.path.join(d, "mods", "fabric-api-0.92.0+1.20.1.jar"), "wb") as f:
+                f.write(b"jar")
+            res = ms.install_modrinth_project("coolmod", d, loader="fabric", version="1.20.1")
+            self.assertEqual(res["missing_dependencies"], [])
+            # Modrinth non risponde per i nomi: nessun avviso sbagliato, l'installazione resta riuscita
+            os.remove(os.path.join(d, "mods", "fabric-api-0.92.0+1.20.1.jar"))
+            state["projects"] = None
+            res = ms.install_modrinth_project("coolmod", d, loader="fabric", version="1.20.1")
+            self.assertTrue(res["success"])
+            self.assertEqual(res["missing_dependencies"], [])
+
     def test_custom_command_with_quoted_path_starts(self):
         # Comando personalizzato non Java con il percorso tra virgolette: prima le virgolette arrivavano a Windows
         import server_manager as sm
