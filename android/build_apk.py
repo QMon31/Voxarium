@@ -119,6 +119,27 @@ def signing_config():
     return keystore, alias, props["store_password"], props.get("key_password", props["store_password"])
 
 
+def rotation_config():
+    """Chiave Voxarium e file del passaggio dalla chiave di prova (signing.properties: new_keystore, new_alias,
+    new_store_password, new_key_password, lineage). None se non ci sono: si firma solo con la chiave originale.
+    Senza la chiave Voxarium e signing.lineage i telefoni già aggiornati con la chiave nuova non si aggiornano più."""
+    props = {}
+    if os.path.isfile(SIGNING_PROPERTIES):
+        with open(SIGNING_PROPERTIES, encoding="utf-8") as f:
+            for line in f:
+                if "=" in line and not line.lstrip().startswith("#"):
+                    k, v = line.split("=", 1)
+                    props[k.strip()] = v.strip()
+    if not props.get("new_keystore"):
+        return None
+    new_ks = os.path.join(PROJECT_DIR, props["new_keystore"])
+    lineage = os.path.join(PROJECT_DIR, props.get("lineage", "signing.lineage"))
+    if not (os.path.isfile(new_ks) and os.path.isfile(lineage)):
+        sys.exit("[APK BUILDER] signing.properties indica la chiave Voxarium ma manca il keystore o signing.lineage.")
+    sp = props["new_store_password"]
+    return new_ks, props.get("new_alias", "voxarium"), sp, props.get("new_key_password", sp), lineage
+
+
 def run_cmd(cmd, desc):
     log(f"Esecuzione: {desc}")
     res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -248,12 +269,22 @@ def compile_apk():
     if os.path.exists(final_apk):
         os.remove(final_apk)
     shutil.copy2(aligned_apk, final_apk)
-    run_cmd(
-        f'call "{APKSIGNER}" sign --ks "{keystore_path}" --ks-key-alias {alias} '
-        f'--ks-pass pass:{store_pass} --key-pass pass:{key_pass} "{final_apk}"',
-        "apksigner sign"
-    )
-    log("Verifica APK:\n" + run_cmd(f'call "{APKSIGNER}" verify --verbose "{final_apk}"', "apksigner verify"))
+    rotation = rotation_config() if FLAVOR != "fdroid" else None
+    old_signer = (f'--ks "{keystore_path}" --ks-key-alias {alias} '
+                  f'--ks-pass pass:{store_pass} --key-pass pass:{key_pass}')
+    if rotation:
+        # Chiave di prova per i telefoni fino ad Android 12 e chiave Voxarium da Android 13 (rotazione della firma, v3.1):
+        # l'app già installata si aggiorna senza disinstallarla, perché signing.lineage dice ad Android che la chiave
+        # nuova è il seguito di quella vecchia
+        new_ks, new_alias, new_sp, new_kp, lineage = rotation
+        run_cmd(
+            f'call "{APKSIGNER}" sign {old_signer} --next-signer --ks "{new_ks}" --ks-key-alias {new_alias} '
+            f'--ks-pass pass:{new_sp} --key-pass pass:{new_kp} --lineage "{lineage}" "{final_apk}"',
+            "apksigner sign (chiave di prova + chiave Voxarium)"
+        )
+    else:
+        run_cmd(f'call "{APKSIGNER}" sign {old_signer} "{final_apk}"', "apksigner sign")
+    log("Verifica APK:\n" + run_cmd(f'call "{APKSIGNER}" verify --verbose --print-certs "{final_apk}"', "apksigner verify"))
     return final_apk
 
 

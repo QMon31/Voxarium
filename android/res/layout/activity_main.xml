@@ -253,7 +253,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="2dp"
-                            android:text="Porta MC: 32769 | ping: --"
+                            android:text="--"
                             android:tag="notr"
                             android:textColor="#9a9ca2"
                             android:textSize="12sp" />
@@ -1911,6 +1911,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
                     android:orientation="horizontal">
+                    <Button android:id="@+id/chipEcoCustom" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginEnd="4dp" android:background="@drawable/btn_slate" android:text="15 min" android:tag="notr" android:textColor="#c4c4c8" android:textSize="11sp" android:visibility="gone" />
                     <Button android:id="@+id/chipEco30" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginEnd="4dp" android:background="@drawable/btn_slate" android:text="30 min" android:tag="notr" android:textColor="#c4c4c8" android:textSize="11sp" />
                     <Button android:id="@+id/chipEco45" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:layout_marginEnd="4dp" android:background="@drawable/btn_blue" android:text="45 min" android:tag="notr" android:textColor="#f4f4f5" android:textSize="11sp" />
                     <Button android:id="@+id/chipEco60" android:layout_width="0dp" android:layout_height="36dp" android:layout_weight="1" android:background="@drawable/btn_slate" android:text="60 min" android:tag="notr" android:textColor="#c4c4c8" android:textSize="11sp" />

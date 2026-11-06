@@ -1083,7 +1083,12 @@ class ServerManager:
 
         # 4. Fallback to configured custom command
         if cmd_str:
-            return shlex.split(cmd_str, posix=not IS_WINDOWS)
+            parts = shlex.split(cmd_str, posix=not IS_WINDOWS)
+            if IS_WINDOWS:
+                # shlex in modo Windows lascia le virgolette attorno ai percorsi con spazi: "C:\Program Files\x.exe"
+                # arrivava a Windows con le virgolette e l'avvio falliva ("Impossibile trovare il file specificato")
+                parts = [p[1:-1] if len(p) >= 2 and p[0] == p[-1] == '"' else p for p in parts]
+            return parts
 
         return script_fallback_command(run_bat)
 

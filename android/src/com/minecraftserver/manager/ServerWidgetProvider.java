@@ -393,6 +393,16 @@ public class ServerWidgetProvider extends AppWidgetProvider {
         }
     }
 
+    /** Stesse scritte della Dashboard dell'app: prima il widget mostrava il codice del PC ("STOPPED", "ONLINE"). */
+    private static String stateLabel(String state) {
+        if ("ONLINE".equalsIgnoreCase(state)) return "Online";
+        if ("STARTING".equalsIgnoreCase(state)) return I18n.t("app.avvio");
+        if ("STOPPING".equalsIgnoreCase(state)) return I18n.t("app.arresto");
+        if ("RESTARTING".equalsIgnoreCase(state)) return I18n.t("app.riavvio");
+        if ("CRASHED".equalsIgnoreCase(state)) return "Crash";
+        return I18n.t("ui.offline");
+    }
+
     private static void updateWidgetUI(Context context, String state, boolean ecoSleeping, int playersOnline, int maxPlayers, double ramGb, double tps) {
         AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(context);
         ComponentName thisWidget = new ComponentName(context, ServerWidgetProvider.class);
@@ -408,7 +418,7 @@ public class ServerWidgetProvider extends AppWidgetProvider {
 
         I18n.ensure(context);
         boolean paused = ecoSleeping && !"ONLINE".equalsIgnoreCase(state) && !isTransitionState(state);
-        views.setTextViewText(R.id.widget_status_pill, paused ? I18n.t("app.in_pausa") : I18n.fromPc(state));
+        views.setTextViewText(R.id.widget_status_pill, paused ? I18n.t("app.in_pausa") : stateLabel(state));
         if (paused) {
             views.setTextColor(R.id.widget_status_pill, Color.parseColor("#e3b35a"));
         } else if ("ONLINE".equalsIgnoreCase(state)) {

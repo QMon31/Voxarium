@@ -83,14 +83,23 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Novità per telefono (v4.13.10)"
-                android:tag="t:ui.novita_telefono|v4.13.10"
+                android:text="Novità per telefono (v4.13.11)"
+                android:tag="t:ui.novita_telefono|v4.13.11"
                 android:textColor="#f4f4f5"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
 
             <!-- CONTENUTO NOVITÀ TELEFONO -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Novità (v4.13.11): nuova firma dell'app (chiave Voxarium da Android 13, si aggiorna senza disinstallare); nella Modalità Eco compare anche il valore scelto sul PC (es. 15 min); il widget scrive Offline, Online, Avvio... come l'app invece dei codici del PC; tradotto l'avviso «Ripristino interrotto»."
+                    android:tag="t:ui.novita_v4_13_11_firma"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -292,6 +301,16 @@
                 android:background="#0f0f11"
                 android:padding="12dp"
                 android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="• v4.13.11 (Build 117):
+Nuova firma Voxarium, minuti Eco del PC, scritte del widget, avviso di ripristino tradotto."
+                    android:tag="t:ui.v4_13_11_build_117_firma"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="4dp" />
 
                 <TextView
                     android:layout_width="match_parent"

@@ -35,3 +35,6 @@ local_extra_dirs.txt
 .gradle/
 build/
 local.properties
+
+# Passaggio dalla chiave di prova alla chiave Voxarium (rotazione della firma): solo su questo PC
+signing.lineage

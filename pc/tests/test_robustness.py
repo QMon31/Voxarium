@@ -1337,6 +1337,34 @@ class PaperConsoleTest(unittest.TestCase):
             m._graceful_stop_worker("Arresto")
         self.assertEqual(len(pushes), 1)
 
+    def test_custom_command_with_quoted_path_starts(self):
+        # Comando personalizzato non Java con il percorso tra virgolette: prima le virgolette arrivavano a Windows
+        import server_manager as sm
+        m = self.m
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        m.config["server_dir"] = d
+        m.config["server_run_bat"] = ""
+        m.config["server_command"] = r'"C:\Program Files\Tool\avvia.exe" -u "C:\a b\x.py"'
+        parts = m.get_launch_command()
+        if sm.IS_WINDOWS:
+            self.assertEqual(parts, [r"C:\Program Files\Tool\avvia.exe", "-u", r"C:\a b\x.py"])
+        self.assertFalse(any(p.startswith('"') for p in parts))
+
+    def test_build_deploy_starts_backend_outside_the_job(self):
+        # 05/11/2026: il backend riavviato da build_deploy.py (lanciato da Claude) si è chiuso con l'app Claude
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        src = open(os.path.join(root, "build_deploy.py"), encoding="utf-8").read()
+        step6 = src[src.index("STEP 6"):]
+        self.assertIn("start_detached(", step6)
+        self.assertNotIn("subprocess.Popen(", step6)
+        sys.path.insert(0, root)
+        import detached_start
+        ds = open(os.path.join(root, "detached_start.py"), encoding="utf-8").read()
+        # WMI prima del breakaway, che esce solo dal job più interno
+        self.assertLess(ds.index("_start_with_wmi(args"), ds.index("BREAKAWAY, close_fds"))
+        self.assertEqual(detached_start._ps_quote("a'b"), "'a''b'")
+
     def test_scheduled_restart_texts_use_real_interval(self):
         # Prima console e chat dicevano sempre "4 ore", anche con un altro intervallo
         m = self.m

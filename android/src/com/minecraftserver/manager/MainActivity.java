@@ -58,8 +58,8 @@ import java.util.regex.Pattern;
 
 public class MainActivity extends Activity implements View.OnClickListener {
 
-    public static final int CURRENT_VERSION_CODE = 116;
-    public static final String CURRENT_VERSION_NAME = "4.13.10";
+    public static final int CURRENT_VERSION_CODE = 117;
+    public static final String CURRENT_VERSION_NAME = "4.13.11";
 
     private int dpToPx(int dp) {
         return Math.round(dp * getResources().getDisplayMetrics().density);
@@ -178,6 +178,9 @@ public class MainActivity extends Activity implements View.OnClickListener {
     private TextView txtEcoModeStatusBadge;
     private CheckBox chkEcoMode;
     private Button chipEco30, chipEco45, chipEco60, btnSaveEcoMode;
+    // Minuti scelti sul PC diversi da 30/45/60 (es. 15 dal pannello): prima nessun pulsante era evidenziato
+    private Button chipEcoCustom;
+    private int mEcoCustomMinutes = 0;
     private int mSelectedEcoMinutes = 45;
 
     // Anti-Lag Watchdog Widgets
@@ -546,6 +549,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
         chipEco30 = findViewById(R.id.chipEco30);
         chipEco45 = findViewById(R.id.chipEco45);
         chipEco60 = findViewById(R.id.chipEco60);
+        chipEcoCustom = findViewById(R.id.chipEcoCustom);
         btnSaveEcoMode = findViewById(R.id.btnSaveEcoMode);
 
         // Anti-Lag Watchdog
@@ -720,6 +724,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
         if (chipEco30 != null) chipEco30.setOnClickListener(this);
         if (chipEco45 != null) chipEco45.setOnClickListener(this);
         if (chipEco60 != null) chipEco60.setOnClickListener(this);
+        if (chipEcoCustom != null) chipEcoCustom.setOnClickListener(this);
         if (btnSaveEcoMode != null) btnSaveEcoMode.setOnClickListener(this);
 
         if (btnSaveAntiLag != null) btnSaveAntiLag.setOnClickListener(this);
@@ -1080,6 +1085,8 @@ public class MainActivity extends Activity implements View.OnClickListener {
             setEcoMinutesUI(45);
         } else if (id == R.id.chipEco60) {
             setEcoMinutesUI(60);
+        } else if (id == R.id.chipEcoCustom) {
+            if (mEcoCustomMinutes > 0) setEcoMinutesUI(mEcoCustomMinutes);
         } else if (id == R.id.btnSaveEcoMode) {
             actionSaveEcoMode();
         } else if (id == R.id.btnSaveAntiLag) {
@@ -4631,6 +4638,14 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
     private void setEcoMinutesUI(int minutes) {
         mSelectedEcoMinutes = minutes;
+        if (minutes != 30 && minutes != 45 && minutes != 60 && minutes > 0) mEcoCustomMinutes = minutes;
+        if (chipEcoCustom != null) {
+            chipEcoCustom.setVisibility(mEcoCustomMinutes > 0 ? View.VISIBLE : View.GONE);
+            chipEcoCustom.setText(mEcoCustomMinutes + " min");
+            boolean on = minutes == mEcoCustomMinutes;
+            chipEcoCustom.setBackgroundResource(on ? R.drawable.btn_blue : R.drawable.btn_slate);
+            chipEcoCustom.setTextColor(on ? Color.WHITE : Color.parseColor("#c4c4c8"));
+        }
         if (chipEco30 != null) {
             chipEco30.setBackgroundResource(minutes == 30 ? R.drawable.btn_blue : R.drawable.btn_slate);
             chipEco30.setTextColor(minutes == 30 ? Color.WHITE : Color.parseColor("#c4c4c8"));

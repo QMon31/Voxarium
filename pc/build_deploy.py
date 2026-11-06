@@ -309,19 +309,12 @@ print(f"Avvio del backend da: {app_target_dir}")
 # Stesso registro del launcher, così gli avvisi (print) restano leggibili
 log_dir = os.path.join(os.environ.get("LOCALAPPDATA", ""), "Controllo Server Minecraft")
 os.makedirs(log_dir, exist_ok=True)
-DETACHED = 0x00000008
-NEW_GROUP = 0x00000200
-NO_WINDOW = 0x08000000
-with open(os.path.join(log_dir, "backend.log"), "a", encoding="utf-8") as backend_log:
-    subprocess.Popen(
-        [py_exe, "-u", app_py_file],
-        cwd=app_target_dir,
-        stdin=subprocess.DEVNULL,
-        stdout=backend_log,
-        stderr=subprocess.STDOUT,
-        creationflags=DETACHED | NEW_GROUP | NO_WINDOW,
-        close_fds=True
-    )
+# Fuori dal job di chi lancia questo script: prima, lanciato da Claude, il backend si chiudeva con l'app Claude
+# (05/11/2026 alle 19:39, durante un suo aggiornamento) e la pausa della Modalità Eco smetteva di funzionare
+from detached_start import start_detached
+start_mode = start_detached([py_exe, "-u", app_py_file], app_target_dir, os.path.join(log_dir, "backend.log"))
+print(f"Backend avviato ({start_mode})" + ("" if start_mode != "popen" else
+      ": ATTENZIONE, resta legato a questo terminale e si chiude con lui. Riapri Voxarium dal suo collegamento."))
 
 # Verify port 8080 becomes available
 time.sleep(3)
