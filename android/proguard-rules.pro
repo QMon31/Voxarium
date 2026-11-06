@@ -7,6 +7,7 @@
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
 
-# Classi rinominate spostate tutte nel pacchetto principale (nasconde anche la struttura del codice)
--repackageclasses ''
--allowaccessmodification
+# Nomi di classi e metodi lasciati leggibili (06/11/2026): Google Play Protect segnalava l'app come "dannosa" e la
+# prima versione segnalata (4.12.4, 27/10) era uscita il giorno dopo l'introduzione dei nomi illeggibili. R8 continua
+# a togliere il codice non usato e a ottimizzare; il codice e' comunque pubblico (GPL-3.0, QMon31/Voxarium).
+-dontobfuscate

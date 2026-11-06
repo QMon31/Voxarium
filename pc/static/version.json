@@ -1,8 +1,8 @@
 {
-  "version_code": 117,
-  "version_name": "4.13.11",
+  "version_code": 118,
+  "version_name": "4.13.12",
   "download_url": "/static/Controllo_Server_Minecraft.apk",
-  "release_notes": "v4.13.11: nuova firma dell'app (chiave Voxarium da Android 13, si aggiorna senza disinstallare); nella Modalità Eco compare anche il valore scelto sul PC; il widget scrive Offline, Online, Avvio come l'app; tradotto l'avviso «Ripristino interrotto».",
+  "release_notes": "v4.13.12: il codice dell'app non è più reso illeggibile (offuscamento tolto), per evitare l'avviso «app dannosa» di Google Play Protect; nessun cambiamento nelle funzioni.",
   "min_sdk": 26,
   "target_sdk": 35
 }

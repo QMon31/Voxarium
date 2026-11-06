@@ -618,6 +618,8 @@
 "app.server_in_pausa_eco": "En pausa (modo eco): se inicia solo cuando un jugador intenta entrar",
 "app.vuoi_fermare_pausa_eco": "El servidor está en pausa por el modo eco y se inicia solo cuando un jugador intenta entrar. ¿Quieres detenerlo? Seguirá apagado hasta que lo inicies tú.",
 "pc.eco_server_in_pausa_fermato": "Servidor en pausa detenido: sigue apagado y no se iniciará solo hasta que lo inicies tú.",
+"ui.novita_v4_13_12_offuscamento": "Novedades (v4.13.12): el código de la app ya no se vuelve ilegible (ofuscación eliminada), para evitar el aviso «app dañina» de Google Play Protect; sin cambios en las funciones.",
+"ui.v4_13_12_build_118_offuscamento": "• v4.13.12 (Build 118):\nCódigo ya no ofuscado, contra el aviso de Play Protect.",
 "ui.novita_v4_13_11_firma": "Novedades (v4.13.11): nueva firma de la app (clave Voxarium desde Android 13, se actualiza sin desinstalar); el modo eco muestra también el valor elegido en el PC (p. ej. 15 min); el widget muestra Offline, Online, Iniciando... como la app en lugar de los códigos del PC; traducido el aviso «Restauración interrumpida».",
 "ui.v4_13_11_build_117_firma": "• v4.13.11 (Build 117):\nNueva firma Voxarium, minutos eco del PC, textos del widget, aviso de restauración traducido.",
 "ui.novita_v4_13_10_widget": "Novedades (v4.13.10): el widget muestra «En pausa» cuando el modo eco ha pausado el servidor; la pantalla del reinicio programado muestra el intervalo elegido en el PC en lugar de «cada 4 horas»; los avisos del modo eco y del espacio en disco ya no acaban entre las notificaciones de copias de seguridad.",

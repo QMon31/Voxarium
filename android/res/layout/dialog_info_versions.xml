@@ -83,14 +83,23 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Novità per telefono (v4.13.11)"
-                android:tag="t:ui.novita_telefono|v4.13.11"
+                android:text="Novità per telefono (v4.13.12)"
+                android:tag="t:ui.novita_telefono|v4.13.12"
                 android:textColor="#f4f4f5"
                 android:textSize="14sp"
                 android:textStyle="bold"
                 android:layout_marginBottom="8dp" />
 
             <!-- CONTENUTO NOVITÀ TELEFONO -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Novità (v4.13.12): il codice dell'app non è più reso illeggibile (offuscamento tolto), per evitare l'avviso «app dannosa» di Google Play Protect; nessun cambiamento nelle funzioni."
+                    android:tag="t:ui.novita_v4_13_12_offuscamento"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="6dp" />
+
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -301,6 +310,16 @@
                 android:background="#0f0f11"
                 android:padding="12dp"
                 android:layout_marginBottom="8dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="• v4.13.12 (Build 118):
+Codice non più offuscato, contro l'avviso di Play Protect."
+                    android:tag="t:ui.v4_13_12_build_118_offuscamento"
+                    android:textColor="#c4c4c8"
+                    android:textSize="12sp"
+                    android:layout_marginBottom="4dp" />
 
                 <TextView
                     android:layout_width="match_parent"

@@ -618,6 +618,8 @@
 "app.server_in_pausa_eco": "Pausiert (Eco-Modus): startet von selbst, sobald ein Spieler beitreten will",
 "app.vuoi_fermare_pausa_eco": "Der Server ist durch den Eco-Modus pausiert und startet von selbst, sobald ein Spieler beitreten will. Stoppen? Er bleibt aus, bis du ihn startest.",
 "pc.eco_server_in_pausa_fermato": "Pausierter Server gestoppt: Er bleibt aus und startet nicht von selbst, bis du ihn startest.",
+"ui.novita_v4_13_12_offuscamento": "Neu (v4.13.12): Der App-Code wird nicht mehr unlesbar gemacht (Verschleierung entfernt), um die Warnung „schädliche App“ von Google Play Protect zu vermeiden; keine Änderung an den Funktionen.",
+"ui.v4_13_12_build_118_offuscamento": "• v4.13.12 (Build 118):\nCode nicht mehr verschleiert, gegen die Play-Protect-Warnung.",
 "ui.novita_v4_13_11_firma": "Neu (v4.13.11): neue App-Signatur (Voxarium-Schlüssel ab Android 13, Update ohne Deinstallation); der Eco-Modus zeigt auch den am PC gewählten Wert (z. B. 15 Min.); das Widget zeigt Offline, Online, Start... wie die App statt der PC-Codes; die Meldung „Wiederherstellung unterbrochen“ ist übersetzt.",
 "ui.v4_13_11_build_117_firma": "• v4.13.11 (Build 117):\nNeue Voxarium-Signatur, Eco-Minuten vom PC, Widget-Texte, übersetzte Wiederherstellungsmeldung.",
 "ui.novita_v4_13_10_widget": "Neu (v4.13.10): Das Widget zeigt „Pausiert“, wenn der Eco-Modus den Server pausiert hat; der Bildschirm für den geplanten Neustart zeigt das am PC gewählte Intervall statt „alle 4 Stunden“; Eco-Modus- und Speicherplatz-Meldungen landen nicht mehr bei den Backup-Benachrichtigungen.",

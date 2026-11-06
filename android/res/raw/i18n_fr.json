@@ -618,6 +618,8 @@
 "app.server_in_pausa_eco": "En pause (mode éco) : il démarre tout seul quand un joueur essaie de se connecter",
 "app.vuoi_fermare_pausa_eco": "Le serveur est en pause à cause du mode éco et démarre tout seul quand un joueur essaie de se connecter. L'arrêter ? Il restera éteint jusqu'à ce que vous le démarriez.",
 "pc.eco_server_in_pausa_fermato": "Serveur en pause arrêté : il reste éteint et ne démarrera pas tout seul tant que vous ne le démarrez pas.",
+"ui.novita_v4_13_12_offuscamento": "Nouveautés (v4.13.12) : le code de l'application n'est plus rendu illisible (obfuscation retirée), pour éviter l'alerte « application dangereuse » de Google Play Protect ; aucune modification des fonctions.",
+"ui.v4_13_12_build_118_offuscamento": "• v4.13.12 (Build 118) :\nCode plus obfusqué, contre l'alerte de Play Protect.",
 "ui.novita_v4_13_11_firma": "Nouveautés (v4.13.11) : nouvelle signature de l'application (clé Voxarium dès Android 13, mise à jour sans désinstaller) ; le mode éco affiche aussi la valeur choisie sur le PC (ex. 15 min) ; le widget affiche Offline, Online, Démarrage... comme l'application au lieu des codes du PC ; l'alerte « Restauration interrompue » est traduite.",
 "ui.v4_13_11_build_117_firma": "• v4.13.11 (Build 117) :\nNouvelle signature Voxarium, minutes éco du PC, libellés du widget, alerte de restauration traduite.",
 "ui.novita_v4_13_10_widget": "Nouveautés (v4.13.10) : le widget affiche « En pause » quand le mode éco a mis le serveur en pause ; l'écran du redémarrage programmé affiche l'intervalle choisi sur le PC au lieu de « toutes les 4 heures » ; les alertes du mode éco et d'espace disque ne finissent plus parmi les notifications de sauvegarde.",

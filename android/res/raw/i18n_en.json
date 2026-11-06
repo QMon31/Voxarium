@@ -618,6 +618,8 @@
 "app.server_in_pausa_eco": "Paused (Eco Mode): it starts by itself when a player tries to join",
 "app.vuoi_fermare_pausa_eco": "The server is paused by Eco Mode and starts by itself when a player tries to join. Stop it? It will stay off until you start it.",
 "pc.eco_server_in_pausa_fermato": "Paused server stopped: it stays off and will not start by itself until you start it.",
+"ui.novita_v4_13_12_offuscamento": "New (v4.13.12): the app code is no longer made unreadable (obfuscation removed), to avoid Google Play Protect's “harmful app” warning; no change to the features.",
+"ui.v4_13_12_build_118_offuscamento": "• v4.13.12 (Build 118):\nCode no longer obfuscated, against the Play Protect warning.",
 "ui.novita_v4_13_11_firma": "New (v4.13.11): new app signature (Voxarium key from Android 13, updates without uninstalling); Eco Mode also shows the value chosen on the PC (e.g. 15 min); the widget shows Offline, Online, Starting... like the app instead of the PC codes; the “Restore interrupted” alert is translated.",
 "ui.v4_13_11_build_117_firma": "• v4.13.11 (Build 117):\nNew Voxarium signature, Eco minutes from the PC, widget labels, restore alert translated.",
 "ui.novita_v4_13_10_widget": "New (v4.13.10): the widget shows “Paused” when Eco Mode has paused the server; the scheduled restart screen shows the interval chosen on the PC instead of “every 4 hours”; Eco Mode and disk space alerts no longer end up among the backup notifications.",
