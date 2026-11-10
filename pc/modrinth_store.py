@@ -121,6 +121,23 @@ def save_installed_projects(server_dir: str, installed: Dict[str, Any]) -> None:
         print(f"[Store] Impossibile salvare l'elenco delle mod installate ({ledger_path}): {e}")
 
 
+_LOADER_WORDS = "fabric|forge|neoforge|quilt|paper|bukkit|spigot|purpur"
+
+
+def _file_is_project(fname: str, name: str, min_len: int = 2) -> bool:
+    """True se il file .jar è del progetto con questo nome (slug o titolo): dopo il nome possono esserci solo il
+    tipo di server e la versione ("sodium-fabric-0.6.0+mc1.21.1.jar", "fabric-api-0.92.jar", "jei-1.20.1-forge.jar").
+    Prima bastava che il file iniziasse come il nome: "sodium-extra-....jar" valeva come Sodium, quindi la scheda di
+    Sodium risultava installata (e Disinstalla cancellava Sodium Extra) e l'avviso della dipendenza mancante taceva."""
+    tokens = re.findall(r"[a-z0-9]+", (name or "").lower())
+    if len("".join(tokens)) < min_len:
+        return False
+    core = r"[\W_]*".join(re.escape(t) for t in tokens)
+    pattern = (r"^" + core + r"(?:[\W_]+(?:" + _LOADER_WORDS + r"))*"
+               r"(?:[\W_]*(?:v|mc)?\d.*)?\.jar(?:\.disabled)?$")
+    return re.match(pattern, fname.lower()) is not None
+
+
 def is_project_installed_on_disk(server_dir: str, project_id: str, slug: str, title: str, installed_dict: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Checks if a project is installed by ID, slug, cached hash match, or disk filename match."""
     # 1. Direct match in ledger
@@ -143,10 +160,6 @@ def is_project_installed_on_disk(server_dir: str, project_id: str, slug: str, ti
 
     # 3. Check if any file in mods/ or plugins/ matches the slug or ID
     import re
-    slug_norm = (slug or "").lower().replace("-", "_").replace(" ", "_")
-    title_norm = (title or "").lower().replace("-", "_").replace(" ", "_")
-    slug_clean = re.sub(r"[^a-z0-9]", "", (slug or "").lower())
-    title_clean = re.sub(r"[^a-z0-9]", "", (title or "").lower())
     p_id_norm = (project_id or "").lower()
 
     for sub in ["mods", "plugins"]:
@@ -157,13 +170,9 @@ def is_project_installed_on_disk(server_dir: str, project_id: str, slug: str, ti
                     if not (fname.lower().endswith(".jar") or fname.lower().endswith(".disabled")):
                         continue
                     fn_norm = fname.lower().replace("-", "_").replace(" ", "_")
-                    fn_clean = re.sub(r"[^a-z0-9]", "", fname.lower().replace(".jar", "").replace(".disabled", ""))
 
-                    if (slug_norm and (fn_norm.startswith(slug_norm + "_") or fn_norm.startswith(slug_norm + "-") or fn_norm == slug_norm + ".jar")) or \
-                       (slug_clean and len(slug_clean) >= 3 and (fn_clean.startswith(slug_clean) or fn_clean == slug_clean)) or \
-                       (p_id_norm and p_id_norm in fn_norm) or \
-                       (title_norm and len(title_norm) > 4 and (fn_norm.startswith(title_norm + "_") or fn_norm.startswith(title_norm + "-"))) or \
-                       (title_clean and len(title_clean) >= 4 and (fn_clean.startswith(title_clean) or fn_clean == title_clean)):
+                    if _file_is_project(fname, slug) or _file_is_project(fname, title, min_len=4) or \
+                       (p_id_norm and p_id_norm in fn_norm):
                         return {
                             "project_id": project_id,
                             "slug": slug,

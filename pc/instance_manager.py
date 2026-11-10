@@ -139,6 +139,20 @@ def get_active_instance() -> Dict[str, Any]:
 _SWITCH_OK_STATES = ("STOPPED", "CRASHED", "OFFLINE")
 
 
+def _forget_crash(manager) -> None:
+    """Si passa a un altro server: il crash di quello di prima non lo riguarda. Prima lo stato restava "CRASHED" e,
+    cambiando server durante l'attesa del riavvio automatico, allo scadere partiva il server appena scelto."""
+    lock = getattr(manager, "lock", None)
+    if lock is None or not hasattr(manager, "crash_history"):
+        return
+    with lock:
+        if getattr(manager, "state", "") == "CRASHED":
+            manager.state = "STOPPED"   # il conto alla rovescia del riavvio automatico si ferma da solo
+        manager.crash_countdown = 0
+        manager.auto_restart_paused = False
+        manager.crash_history.clear()
+
+
 def switch_instance(instance_id: str, manager=None) -> Dict[str, Any]:
     """Switches the active instance, synchronizing config.json and manager."""
     # Prima si controllava solo ONLINE: durante avvio o spegnimento il pannello passava all'altro server e perdeva di
@@ -172,6 +186,10 @@ def switch_instance(instance_id: str, manager=None) -> Dict[str, Any]:
         else:
             cfg = read_json_with_backup(CONFIG_FILE) if os.path.isfile(CONFIG_FILE) else {}
 
+        old_dir = os.path.normcase(os.path.abspath(cfg["server_dir"])) if cfg.get("server_dir") else ""
+        new_dir = os.path.normcase(os.path.abspath(target["server_dir"])) if target.get("server_dir") else ""
+        if manager and old_dir != new_dir:
+            _forget_crash(manager)
         cfg["server_dir"] = target.get("server_dir", cfg.get("server_dir"))
         cfg["server_run_bat"] = target.get("server_run_bat", cfg.get("server_run_bat"))
         cfg["server_command"] = target.get("server_command", cfg.get("server_command"))

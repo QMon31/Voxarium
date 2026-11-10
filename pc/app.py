@@ -324,6 +324,11 @@ def broadcast_backup_to_ws(backup_item: dict):
                 msg, title = RESTORE_DONE_MSG, "Ripristino Completato!"
             if hasattr(manager, 'add_log'):
                 manager.add_log(f"[Backup] {msg}")
+                skipped = backup_item.get("skipped_files") or []
+                if skipped and backup_item.get("operation") != "restore":
+                    names = ", ".join(skipped[:5]) + (" ..." if len(skipped) > 5 else "")
+                    manager.add_log(f"[Backup] Attenzione: {len(skipped)} file non letti (bloccati o illeggibili) "
+                                    f"non sono nel backup: {names}")
             if hasattr(manager, 'send_push_notification'):
                 manager.send_push_notification(
                     title=title,
@@ -1633,6 +1638,8 @@ def update_config(req: ConfigUpdateRequest, request: Request):
         # La porta del pannello resta quella che il programma sul PC e l'app si aspettano (8080): con un'altra il
         # pannello non si apriva più, e un valore non valido impediva al programma di ripartire
         update_data.pop("web_port", None)
+        if new_dir is not None:
+            update_data["server_dir"] = new_dir   # senza gli spazi attorno (prima si salvava com'era scritta)
         if "crash_retry_delay_seconds" in update_data:
             update_data["crash_retry_delay_seconds"] = max(3, min(600, int(update_data["crash_retry_delay_seconds"])))
         # Se admin_pin è vuoto o composto solo da spazi, mantieni il PIN attuale invece di sovrascriverlo
@@ -1684,6 +1691,9 @@ def update_config(req: ConfigUpdateRequest, request: Request):
             manager.scheduled_enabled = req.scheduled_restart_enabled
         if req.auto_restart_crash is not None:
             manager.auto_restart_on_crash = req.auto_restart_crash
+        if "crash_retry_delay_seconds" in update_data:
+            # Vale subito: prima solo dopo aver chiuso e riaperto il programma
+            manager.crash_retry_delay = update_data["crash_retry_delay_seconds"]
     if port_res or current.get("server_dir", "") != old_dir:
         request_minecraft_port_sync()   # router e indirizzo da copiare aggiornati subito, senza riavviare il programma
     safe_cfg = {k: v for k, v in manager.config.items() if k not in SECRET_CONFIG_KEYS}

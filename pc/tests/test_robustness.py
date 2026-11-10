@@ -13,6 +13,7 @@ import tempfile
 import threading
 import time
 import unittest
+import zipfile
 from typing import Dict, Optional
 from unittest import mock
 
@@ -2004,6 +2005,155 @@ class BackupDownloadUnknownIdTest(unittest.TestCase):
                 self.assertEqual(ctx.exception.status_code, 404)
                 res = app_mod.download_backup_item(None, id="desktop")
                 self.assertEqual(res.path, main_zip)
+
+
+class BugCheck20261110Test(unittest.TestCase):
+    """Difetti trovati nel controllo del 10/11/2026 (Store, backup con file illeggibile, cambio server dopo un crash)."""
+
+    def test_store_does_not_take_an_addon_for_the_base_mod(self):
+        # Prima "sodium-extra-....jar" valeva come Sodium: scheda "Installata", Disinstalla cancellava Sodium Extra
+        # e l'avviso della dipendenza mancante non arrivava
+        import modrinth_store as ms
+        ok = [("sodium-fabric-0.6.0+mc1.21.1.jar", "sodium"), ("fabric-api-0.92.0+1.20.1.jar", "fabric-api"),
+              ("fabricapi-0.92.jar", "fabric-api"), ("jei-1.20.1-forge-15.2.0.27.jar", "jei"),
+              ("create-1.20.1-0.5.1.f.jar", "create"), ("lithium-fabric-mc1.21.1-0.13.0.jar", "lithium"),
+              ("Sodium.jar", "sodium"), ("justenoughitems-15.jar.disabled", "Just Enough Items")]
+        no = [("sodium-extra-fabric-0.6.0+mc1.21.1.jar", "sodium"), ("create_enchantment_industry-1.3.3.jar", "create"),
+              ("jei-integration-1.0.jar", "jei"), ("createaddition-1.2.jar", "create")]
+        for fname, name in ok:
+            self.assertTrue(ms._file_is_project(fname, name), (fname, name))
+        for fname, name in no:
+            self.assertFalse(ms._file_is_project(fname, name), (fname, name))
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        os.makedirs(os.path.join(d, "mods"))
+        extra = os.path.join(d, "mods", "sodium-extra-fabric-0.6.0+mc1.21.1.jar")
+        with open(extra, "wb") as f:
+            f.write(b"jar")
+        self.assertIsNone(ms.is_project_installed_on_disk(d, "AANobbMI", "sodium", "Sodium", {}))
+        self.assertIsNotNone(ms.is_project_installed_on_disk(d, "PtjYWJkn", "sodium-extra", "Sodium Extra", {}))
+        version = {"dependencies": [{"project_id": "AANobbMI", "dependency_type": "required"}]}
+        import io
+        body = io.BytesIO(json.dumps([{"id": "AANobbMI", "slug": "sodium", "title": "Sodium"}]).encode("utf-8"))
+        body.__enter__ = lambda *a: body
+        body.__exit__ = lambda *a: None
+        with mock.patch.object(ms.urllib.request, "urlopen", return_value=body):
+            missing = ms.missing_required_dependencies(version, d, {})
+        self.assertEqual([m["title"] for m in missing], ["Sodium"])
+        self.assertTrue(os.path.isfile(extra))
+
+    def _backup_dirs(self):
+        import backup_manager
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        server, desktop = os.path.join(d, "Mondo"), os.path.join(d, "Desktop")
+        os.makedirs(os.path.join(server, "world"))
+        os.makedirs(desktop)
+        with open(os.path.join(server, "server.properties"), "w", encoding="utf-8") as f:
+            f.write("server-port=25570\n")
+        return backup_manager, backup_manager.BackupManager(server, desktop), server
+
+    def _wait(self, bm):
+        for _ in range(400):
+            if not bm.is_running:
+                return
+            time.sleep(0.05)
+        self.fail("operazione non finita")
+
+    def test_backup_drops_a_file_that_stops_reading_halfway(self):
+        # Prima la parte letta restava nello ZIP come file intero e il ripristino la metteva al posto di quello buono
+        import builtins
+        bmod, bm, server = self._backup_dirs()
+        level = os.path.join(server, "world", "level.dat")
+        good = b"DATI-BUONI-" * 300000
+        with open(level, "wb") as f:
+            f.write(good)
+        real_open = builtins.open
+
+        class Flaky:
+            def __init__(self, f):
+                self.f, self.n = f, 0
+
+            def read(self, n=-1):
+                self.n += 1
+                if self.n > 1:
+                    raise PermissionError(13, "file bloccato")
+                return self.f.read(n)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                self.f.close()
+
+        def fake_open(p, mode="r", *a, **k):
+            f = real_open(p, mode, *a, **k)
+            return Flaky(f) if mode == "rb" and str(p).endswith("level.dat") else f
+
+        with mock.patch.object(bmod, "open", fake_open, create=True):
+            self.assertEqual(bm.start_backup(is_server_stopped=True).get("status"), "success")
+            self._wait(bm)
+        self.assertEqual(bm.progress.get("skipped_files"), ["world/level.dat"])
+        with zipfile.ZipFile(bm.target_path) as zf:
+            self.assertIsNone(zf.testzip())
+            self.assertNotIn("world/level.dat", zf.namelist())
+            self.assertIn("server.properties", zf.namelist())
+        self.assertEqual(bm.start_restore(is_server_stopped=True).get("status"), "success")
+        self._wait(bm)
+        self.assertFalse(bm.progress.get("error"), bm.progress)
+        with open(level, "rb") as f:
+            self.assertEqual(f.read(), good)   # il file buono resta al suo posto
+
+    def test_restore_skips_files_the_backup_marked_as_unread(self):
+        # Backup fatti fino alla 4.24.0: il file non letto può essere nello ZIP tagliato a metà
+        bmod, bm, server = self._backup_dirs()
+        level = os.path.join(server, "world", "level.dat")
+        with open(level, "wb") as f:
+            f.write(b"mondo intero")
+        with zipfile.ZipFile(bm.target_path, "w") as zf:
+            zf.writestr("server.properties", "server-port=25570\n")
+            zf.writestr("world/level.dat", b"mondo")
+            zf.writestr(bmod.BACKUP_INFO_NAME, json.dumps({"format": 2, "server_dir": server,
+                                                             "skipped": ["world/level.dat"]}))
+        self.assertEqual(bm.start_restore(is_server_stopped=True).get("status"), "success")
+        self._wait(bm)
+        self.assertFalse(bm.progress.get("error"), bm.progress)
+        with open(level, "rb") as f:
+            self.assertEqual(f.read(), b"mondo intero")
+
+    def test_switching_server_forgets_the_crash_of_the_previous_one(self):
+        # Prima lo stato restava CRASHED e il riavvio automatico in attesa accendeva il server appena scelto
+        import instance_manager
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        inst_file, cfg_file = os.path.join(d, "instances.json"), os.path.join(d, "config.json")
+        a, b = os.path.join(d, "A"), os.path.join(d, "B")
+        os.makedirs(a)
+        os.makedirs(b)
+        with open(inst_file, "w", encoding="utf-8") as f:
+            json.dump([{"id": "a", "server_dir": a, "is_active": True},
+                       {"id": "b", "server_dir": b, "is_active": False}], f)
+
+        class FakeManager:
+            def __init__(self):
+                self.lock = threading.RLock()
+                self.state = "CRASHED"
+                self.config = {"server_dir": a}
+                self.crash_history = [{"timestamp": time.time()}]
+                self.crash_countdown = 5
+                self.auto_restart_paused = True
+
+            def save_config(self):
+                pass
+        m = FakeManager()
+        with mock.patch.object(instance_manager, "INSTANCES_FILE", inst_file), \
+                mock.patch.object(instance_manager, "CONFIG_FILE", cfg_file):
+            # Stesso server (riallineamento dopo una modifica): il crash resta
+            self.assertTrue(instance_manager.switch_instance("a", manager=m).get("success"))
+            self.assertEqual((m.state, m.crash_countdown, len(m.crash_history)), ("CRASHED", 5, 1))
+            self.assertTrue(instance_manager.switch_instance("b", manager=m).get("success"))
+        self.assertEqual((m.state, m.crash_countdown, m.crash_history, m.auto_restart_paused),
+                         ("STOPPED", 0, [], False))
 
 
 if __name__ == "__main__":

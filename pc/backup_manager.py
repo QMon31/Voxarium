@@ -595,6 +595,11 @@ class BackupManager:
                         # Non-critical skipped file (e.g. transient log or locked cache file)
                         processed_bytes += sz
                         skipped_files.append(rel_p.replace('\\', '/'))
+                        # File che ha smesso di leggersi a metà: la parte già scritta non resta nello ZIP come se
+                        # fosse il file intero (prima il ripristino la metteva al posto del file buono)
+                        if zf.NameToInfo.get(zinfo.filename) is zinfo:
+                            del zf.NameToInfo[zinfo.filename]
+                            zf.filelist.remove(zinfo)
 
                     processed_files += 1
 
@@ -655,6 +660,8 @@ class BackupManager:
                 self.progress["phase"] = "done"
                 self.progress["cloud_synced"] = cloud_synced
                 self.progress["cloud_error"] = cloud_err
+                # File non letti (bloccati o illeggibili) e quindi non salvati: prima non lo diceva nessuno
+                self.progress["skipped_files"] = sorted(skipped_files)
                 self.progress["completed_at"] = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                 self.progress["processed_mb"] = final_size_mb
                 self.progress["elapsed_seconds"] = elapsed
@@ -1116,10 +1123,18 @@ class BackupManager:
                             print(f"[Ripristino] {path} non messo da parte: {me}")
                         return None
 
+                    # File che il backup non è riuscito a leggere: non si rimettono (nei backup fatti fino alla
+                    # 4.24.0 possono essere nello ZIP tagliati a metà) e quelli del server restano come sono
+                    skipped_set = {
+                        os.path.normcase(os.path.normpath(p))
+                        for p in meta.get("skipped", [])
+                    }
                     CHUNK_SIZE = 2 * 1024 * 1024  # 2 MB chunks
                     for info in infolist:
                         if self.cancel_requested:
                             raise InterruptedError("Ripristino annullato dall'utente.")
+                        if not info.is_dir() and os.path.normcase(os.path.normpath(info.filename)) in skipped_set:
+                            continue
 
                         dest = os.path.abspath(os.path.join(server_root, info.filename))
                         if os.path.commonpath([server_root, dest]) != server_root:
@@ -1201,10 +1216,6 @@ class BackupManager:
                         os.path.normcase(os.path.normpath(i.filename))
                         for i in infolist
                         if not i.is_dir()
-                    }
-                    skipped_set = {
-                        os.path.normcase(os.path.normpath(p))
-                        for p in meta.get("skipped", [])
                     }
                     for root, dirs, files in os.walk(server_root, topdown=False):
                         if self.cancel_requested:
